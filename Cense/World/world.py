@@ -1,25 +1,24 @@
-import numpy as np
-import World.worldParser as worldParser
+from abc import ABC, abstractmethod
+
 import Decider.action as action
 
 
 #
-# World Object representing the world in it's current state.
-# performs Actions defined in the Action package
+# Abstract World Class modeling a hot wire game capable of performing actions and switching states
 #
-class World:
-    # Array containing the current state of the world
-    __worldState = np.zeros([5, 5, 4])
-    # Current position of the tool center point
-    tcp_pos_x = 0
-    tcp_pos_y = 0
+class World(ABC):
 
-    def __init__(self, world_path=None):
-        if world_path is not None:
-            # Parse world from given image
-            self.__worldState = worldParser.create_wire_from_file(world_path)
-        if world_path is None:
-            self.__worldState = worldParser.create_wire_from_file()
+    #
+    # World encoding:
+    # Unix like world encoding to enable fast bitwise operation on the world states
+    #
+    wire = 1
+    rotor_top = 1 << 1
+    rotor_bot = 1 << 2
+    goal = 1 << 3
+
+    def __init__(self):
+        pass
 
     def perform_action(self, action_to_perform):
         if not isinstance(action_to_perform, action.Action):
@@ -27,14 +26,42 @@ class World:
             return
 
         if action_to_perform == action.Action.LEFT:
-            print("perform left")
+            self.__move_left()
         elif action_to_perform == action.Action.RIGHT:
-            print("perform right")
+            self.__move_right()
         elif action_to_perform == action.Action.UP:
-            print("perform up")
+            self.__move_up()
         elif action_to_perform == action.Action.DOWN:
-            print("perform down")
+            self.__move_down()
         elif action_to_perform == action.Action.ROTATE_CLOCKWISE:
-            print("rotate clockwise")
+            self.__turn_clockwise()
         elif action_to_perform == action.Action.ROTATE_COUNTER_CLOCKWISE:
-            print("rotate counterclockwise")
+            self.__turn_counter_clockwise()
+
+    @abstractmethod
+    def __move_left(self):
+        pass
+
+    @abstractmethod
+    def __move_right(self):
+        pass
+
+    @abstractmethod
+    def __move_up(self):
+        pass
+
+    @abstractmethod
+    def __move_down(self):
+        pass
+
+    @abstractmethod
+    def __turn_clockwise(self):
+        pass
+
+    @abstractmethod
+    def __turn_counter_clockwise(self):
+        pass
+
+    @abstractmethod
+    def get_state(self):
+        pass

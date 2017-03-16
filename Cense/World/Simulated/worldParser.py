@@ -1,0 +1,34 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+
+# world resolution
+world_resolution = 25, 15
+
+
+#
+# Takes an image and creates a three dimensional array from it
+# First and second dimensions being the coordinates of the pixel
+# Third dimension being either 1 or 0 where a 1 represents the wire and a 0 represents the background
+#
+def create_wire_from_file(file_path='Resources/wires/HotWire2.png', debug=False):
+
+    # Read image and export it as numpy array
+    image = Image.open(file_path)
+    np_image = np.asarray(image, dtype=np.uint8)
+    img_arr_cp = np.copy(np_image)
+
+    # Visualize the array containing the world
+    if debug:
+        plt.imshow(img_arr_cp)
+        plt.show()
+
+    # Reduce the array to the red values
+    wire_arr = np.array(img_arr_cp[:, :, 0])
+    # Where red values aren't 0 aka where the wire is put a 1
+    wire_arr[wire_arr > 0] = 1.0
+
+    return wire_arr
+
+if __name__ == '__main__':
+    create_wire_from_file('C:/Repos/demonstrator_RLAlgorithm/Resources/wires/HotWire2.png', True)
