@@ -2,6 +2,7 @@ import World.Simulated.worldParser as worldParser
 import numpy as np
 from World.world import World
 import math
+from Decider.action import Action
 
 
 class SimulatedWorld(World):
@@ -81,23 +82,31 @@ class SimulatedWorld(World):
     #
     # returns coordinates of a new goal based on the coordinates of the old goal
     #
-    def find_new_goal(self, old_goal):
-        position = np.array(old_goal)
-        goal_column = old_goal[0] + self.__state_size
-        path_from_old_goal = []
-        # Positions relative to the old goal where the wire might continue
-        positions_to_search = np.array([[0, 1], [0, -1], [1, 1], [1, 0], [1, -1]])
-        while position[0] != goal_column:
-            positions_found = []
-            for i in positions_to_search:
-                if i not in path_from_old_goal and self._flag_is_set(position+i, np.sum([position, i])):
-                    positions_found.append(i)
-            if len(positions_found) == 1:
-                path_from_old_goal.append(position)
-                position = np.sum(positions_found[0], position)
-            else:
-                # TODO: finish this, line 178 in HW_6act_lookup_4
-                pass
+    def find_new_goal(self, previous_action):
+        # Make a list of all wire positions around the old goal
+        list_of_wires = []
+        state_offset = [self.tcp_pos[0]-math.floor(self.__state_size/2), self.tcp_pos[1] + math.floor(self.__state_size/2)]
+        for i in range(self.__state_size):
+            for j in range(self.__state_size):
+                if self._flag_is_set([state_offset[1]+j, state_offset[0]+i], self.wire):
+                    list_of_wires.append([i, j])
+
+        # Clean list
+        if previous_action == Action.UP:
+            list_of_wires = list_of_wires[list_of_wires[:, 0] <= 2]
+            # TODO: finish implementation
+
+        distance_list = []
+        for wire in list_of_wires:
+            x_dist = np.abs(2 - wire[0])
+            y_dist = np.abs(2 - wire[1])
+            dist = x_dist + y_dist
+            distance_list.append(dist)
+
+        goal_index = np.argmax(distance_list)
+        goal_relative = list_of_wires[goal_index]
+        goal = np.sum(goal_relative, state_offset)
+        return goal
 
     #
     # Returns the state with coordinates describing the upper left
