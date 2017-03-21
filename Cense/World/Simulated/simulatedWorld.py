@@ -14,6 +14,7 @@ class SimulatedWorld(World):
     __state_size = 5
 
     def __init__(self, world_path=None):
+        super().__init__()
         if world_path is not None:
             # Parse world from given image
             self.__world = worldParser.create_wire_from_file(world_path)

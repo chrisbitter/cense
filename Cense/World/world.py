@@ -28,17 +28,17 @@ class World(ABC):
             return
 
         if action_to_perform == action.Action.LEFT:
-            self.__move_left()
+            self.move_left()
         elif action_to_perform == action.Action.RIGHT:
-            self.__move_right()
+            self.move_right()
         elif action_to_perform == action.Action.UP:
-            self.__move_up()
+            self.move_up()
         elif action_to_perform == action.Action.DOWN:
-            self.__move_down()
+            self.move_down()
         elif action_to_perform == action.Action.ROTATE_CLOCKWISE:
-            self.__turn_clockwise()
+            self.turn_clockwise()
         elif action_to_perform == action.Action.ROTATE_COUNTER_CLOCKWISE:
-            self.__turn_counter_clockwise()
+            self.turn_counter_clockwise()
 
     @abstractmethod
     def move_left(self):
