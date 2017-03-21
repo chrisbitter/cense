@@ -39,29 +39,29 @@ class World(ABC):
             self.__turn_counter_clockwise()
 
     @abstractmethod
-    def __move_left(self):
+    def move_left(self):
         pass
 
     @abstractmethod
-    def __move_right(self):
+    def move_right(self):
         pass
 
     @abstractmethod
-    def __move_up(self):
+    def move_up(self):
         pass
 
     @abstractmethod
-    def __move_down(self):
+    def move_down(self):
         pass
 
     @abstractmethod
-    def __turn_clockwise(self):
+    def turn_clockwise(self):
         pass
 
     @abstractmethod
-    def __turn_counter_clockwise(self):
+    def turn_counter_clockwise(self):
         pass
 
     @abstractmethod
-    def get_state(self):
+    def get_state(self, coordinates):
         pass

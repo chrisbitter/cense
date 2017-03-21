@@ -1,4 +1,5 @@
 from enum import Enum
+import random
 
 
 #
@@ -17,3 +18,8 @@ class Action(Enum):
     ROTATE_CLOCKWISE = 4
     # Turns the TCP 45 degrees counterclockwise
     ROTATE_COUNTER_CLOCKWISE = 5
+
+    # Generates a random action
+    @staticmethod
+    def get_random_action():
+        return random.choice(list(Action))
