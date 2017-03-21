@@ -32,4 +32,4 @@ def create_wire_from_file(file_path=sys.path[2] + '/Resources/wires/Cense_wire_0
     return wire_arr
 
 if __name__ == '__main__':
-    create_wire_from_file('C:/Repos/demonstrator_RLAlgorithm/Resources/wires/HotWire2.png', True)
+    create_wire_from_file(debug=True)

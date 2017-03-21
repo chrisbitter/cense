@@ -12,10 +12,12 @@ class World(ABC):
     # World encoding:
     # Unix like world encoding to enable fast bitwise operation on the world states
     #
+    backdrop = 0
     wire = 1
     rotor_top = 1 << 1
     rotor_bot = 1 << 2
     goal = 1 << 3
+    out_of_world = 1 << 4
 
     def __init__(self):
         pass

@@ -27,13 +27,11 @@ class SimulatedWorld(World):
     #
     def __create_init_state(self):
         # Calculate the offset of the claws from the center point of a given state
-        tool_offset = math.ceil(self.__state_size/2)
-        print("offset is :", tool_offset)
-        self.tcp_pos = (tool_offset, 0)
+        tool_offset = math.floor(self.__state_size/2)
 
         # Calculate worlds center based on the assumption that the wire always starts in the middle of the image
         center = math.floor(self.__world.shape[0]/2)
-        print("center is :", center)
+        self.tcp_pos = (center, 0)
         if center < self.__state_size:
             print("Warning: image is to small to properly position claws")
 
@@ -42,10 +40,6 @@ class SimulatedWorld(World):
         lower_claw_pos = ((center + tool_offset), 0)
         self._set_flag(upper_claw_pos, self.rotor_top)
         self._set_flag(lower_claw_pos, self.rotor_bot)
-
-        # Starting position of line is always in the exact middle (Might change some day)
-        lineposx = self.tcp_pos[0]
-        lineposy = self.tcp_pos[1]
 
     #
     # Sets a flag while maintaining all other flags that have been set
@@ -108,15 +102,88 @@ class SimulatedWorld(World):
     # Returns the state with coordinates describing the upper left
     #
     def get_state(self, coordinates):
-        return self.__world[coordinates[0]:coordinates[0] + self.__state_size, coordinates[1]:coordinates[1] + self.__state_size]
+        # Create variables representing the upper left corner of the state
+        state_start_x = coordinates[0]
+        state_start_y = coordinates[1]
+
+        # Create variables representing the size of the world
+        world_size_x = self.__world.shape[1]
+        world_size_y = self.__world.shape[0]
+
+        # Create variables representing the size of a state
+        x_size = self.__state_size
+        y_size = self.__state_size
+
+        # Claws always have to be in the middle of the state, so check if there is enough space to the left to do this
+        init_state = False
+        if state_start_x <= math.floor(self.__state_size/2):
+            # Not enough space, extend with out of world
+            init_state = True
+
+        if init_state:
+            x_size = math.ceil(self.__state_size/2) + state_start_x
+
+        # Make sure the snapshot is within boundaries
+        if x_size+state_start_x > world_size_x:
+            # x_offset is too close to the border, would try to copy nonexistent indices, adjust size of copy
+            x_size = world_size_x - state_start_x
+        if y_size+state_start_y > world_size_y:
+            # y_offset is too close to the border, would try to copy nonexistent indices, adjust size of copy
+            y_size = world_size_y - state_start_y
+
+        # Do the copy of the selected area
+        state = self.__world[state_start_y:state_start_y + y_size, state_start_x:state_start_x + x_size]
+
+        # Fill the resized area with out of world Flag
+        if x_size < self.__state_size:
+            if not init_state:
+                # X went out of world, extend towards the right
+                out_of_world_stack = np.zeros([state.shape[0], self.__state_size - x_size], dtype=np.uint8)
+                out_of_world_stack.fill(self.out_of_world)
+                state = np.hstack((state, out_of_world_stack))
+            else:
+                # X is smaller because we are in the initial state where we have to extend to the left
+                out_of_world_stack = np.zeros([state.shape[0], self.__state_size - x_size], dtype=np.uint8)
+                out_of_world_stack.fill(self.out_of_world)
+                state = np.hstack((out_of_world_stack, state))
+        if y_size < self.__state_size:
+            # Y went out of world, extend towards the bottom
+            out_of_world_stack = np.zeros([self.__state_size-y_size, state.shape[1]], dtype=np.uint8)
+            out_of_world_stack.fill(self.out_of_world)
+            state = np.vstack((state, out_of_world_stack))
+        return state
 
     #
     # runs a few tests
     #
     def test(self):
         print(self.__world.shape)
-        # print(self.__world[0, 0])
-        print(self.get_state([math.ceil(self.__world.shape[0]/2-self.__state_size/2), 0]))
+        # Check if in world states work
+        # in_world_coords = [math.ceil(self.__world.shape[0]/2-self.__state_size/2), 0]
+        # print("Check if in world works with coords: ", in_world_coords)
+        # print(self.get_state(in_world_coords))
+
+        # Check if out of world x works
+        # out_of_world_x_coords = [self.__world.shape[1]-self.__state_size + 1, self.__world.shape[0]-self.__state_size]
+        # print("Check if x works with coords: ", out_of_world_x_coords)
+        # print(self.get_state(out_of_world_x_coords))
+
+        # Check if out of world y works
+        # out_of_world_y_coords = [self.__world.shape[1]-self.__state_size, self.__world.shape[0]-self.__state_size + 1]
+        # print("Check if y works with coords: ", out_of_world_y_coords)
+        # print(self.get_state(out_of_world_y_coords))
+
+        # Check if out of world x and y works
+        # print("Check if x and y works")
+        # out_of_world_y_coords = [self.__world.shape[1] - self.__state_size + 1,
+        #                         self.__world.shape[0] - self.__state_size + 1]
+        # print("Check if x and y works with coords: ", out_of_world_y_coords)
+        # print(self.get_state(out_of_world_y_coords))
+
+        # Check if init state works
+        init_state_coords = [0, math.floor(self.__world.shape[0]/2)]
+        print("Check if init state works with coords: ", init_state_coords)
+        print(self.get_state(init_state_coords))
 
     #
     # Moves the claws one unit to the right
