@@ -29,6 +29,17 @@ def create_wire_from_file(file_path=sys.path[2] + '/Resources/wires/Cense_wire_0
     # Where red values aren't 0 aka where the wire is put a 1
     wire_arr[wire_arr > 0] = 1.0
 
+    # Rotate the image array, so it can be accessed naturally with coordinates like self.__world[x,y]
+    wire_arr_temp = np.zeros_like(wire_arr)
+    # Turn around all lines
+    for i in range(wire_arr.shape[0]):
+        wire_arr_temp[i] = wire_arr[i][::-1]
+    wire_arr = np.fliplr(np.flipud(wire_arr_temp.T))
+
+    if debug:
+        plt.imshow(wire_arr)
+        plt.show()
+
     return wire_arr
 
 if __name__ == '__main__':
