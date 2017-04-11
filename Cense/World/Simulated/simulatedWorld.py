@@ -11,7 +11,7 @@ class SimulatedWorld(World):
     # Current position of the tool center point
     tcp_pos = [0, 0]
     # Static variable determining how big a state snapshot should be
-    __state_size = 9
+    __state_size = 5
     # Possible positions for the rotators, in order of clockwise rotation
     # Currently hardcoded for a state size of 5 TODO: create these dynamically
     positions_R_top = np.array([(0, 2), (1, 3), (2, 4), (3, 3), (4, 2), (3, 1), (2, 0), (1, 1)])
@@ -37,7 +37,7 @@ class SimulatedWorld(World):
         # Calculate worlds center based on the assumption that the wire always starts in the middle of the image
         center = math.floor(self.__world.shape[1] / 2)
         self.tcp_pos = (0, center)
-        if center < self.__state_size:
+        if center < math.floor(self.__state_size/2):
             print("Warning: image is to small to properly position claws")
 
         # Calculate initial claw positions based on the worlds center and the previously calculated offset
@@ -45,6 +45,10 @@ class SimulatedWorld(World):
         lower_claw_pos = (0, (center + tool_offset))
         self._set_flag(upper_claw_pos, self.rotor_top)
         self._set_flag(lower_claw_pos, self.rotor_bot)
+
+        # Set initial goal
+        goal_pos = (tool_offset, center)
+        self._set_flag(goal_pos, self.goal)
 
     #
     # Sets a flag while maintaining all other flags that have been set
