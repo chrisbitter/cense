@@ -86,7 +86,8 @@ class SimulatedWorld(World):
         # Make a list of all wire positions around the old goal
         list_of_wires = []
         # Calculate upper left of the current state based on the tool center point position
-        state_offset = [self.tcp_pos[0]-math.floor(self.__state_size/2), self.tcp_pos[1] + math.floor(self.__state_size/2)]
+        state_offset = [self.tcp_pos[0]-math.floor(self.__state_size/2), self.tcp_pos[1] +
+                        math.floor(self.__state_size/2)]
         for i in range(self.__state_size):
             for j in range(self.__state_size):
                 if self._flag_is_set([state_offset[1]+j, state_offset[0]+i], self.wire):
@@ -169,6 +170,111 @@ class SimulatedWorld(World):
         return state
 
     #
+    # Moves the tcp one unit to it's right and adjusts the positions of the claws
+    #
+    def move_right(self):
+        claw_bot, claw_top = self.find_claw_positions()
+
+        # Calculate the future positions of the claws
+        claw_bot_next = (claw_bot[0] + 1, claw_bot[1])
+        claw_top_next = (claw_top[0] + 1, claw_top[1])
+
+        # Move the claws
+        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+
+        # Align tool center point
+        self.tcp_pos[0] += 1
+
+    #
+    # Moves the tcp one unit to it's left and adjusts the positions of the claws
+    #
+    def move_left(self):
+        claw_bot, claw_top = self.find_claw_positions()
+
+        # Calculate the future positions of the claws
+        claw_bot_next = (claw_bot[0] - 1, claw_bot[1])
+        claw_top_next = (claw_top[0] - 1, claw_top[1])
+
+        # Move the claws
+        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+
+        # Align tool center point
+        self.tcp_pos[0] -= 1
+
+    #
+    # Moves the tcp one unit upwards and adjusts the positions of the claws
+    #
+    def move_up(self):
+        claw_bot, claw_top = self.find_claw_positions()
+
+        # Calculate the future positions of the claws
+        claw_bot_next = (claw_bot[0], claw_bot[1] + 1)
+        claw_top_next = (claw_top[0], claw_top[1] + 1)
+
+        # Move the claws
+        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+
+        # Align tool center point
+        self.tcp_pos[1] += 1
+
+    #
+    # Moves the tcp one unit downwards and adjusts the positions of the claws
+    #
+    def move_down(self):
+        claw_bot, claw_top = self.find_claw_positions()
+
+        # Calculate the future positions of the claws
+        claw_bot_next = (claw_bot[0], claw_bot[1] - 1)
+        claw_top_next = (claw_top[0], claw_top[1] - 1)
+
+        # Move the claws
+        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+
+        # Align tool center point
+        self.tcp_pos[1] -= 1
+
+    def turn_clockwise(self):
+        pass
+
+    def turn_counter_clockwise(self):
+        pass
+
+    #
+    # Returns the position of the bottom claw and the top claw
+    #
+    def find_claw_positions(self):
+        # Calculate upper left of the current state based on the tool center point position
+        state_offset = [self.tcp_pos[0] - math.floor(self.__state_size / 2), self.tcp_pos[1] +
+                        math.floor(self.__state_size / 2)]
+        # Search for the lower and the upper claw
+        rotor_top, rotor_bot = (0, 0)
+        for i in range(self.__state_size):
+            for j in range(self.__state_size):
+                if self._flag_is_set([state_offset[1] + j, state_offset[0] + i], self.rotor_bot):
+                    rotor_bot = [i, j]
+                elif self._flag_is_set([state_offset[1] + j, state_offset[0] + i], self.rotor_top):
+                    rotor_top = [i, j]
+        return rotor_bot, rotor_top
+
+    #
+    # Moves the claws from the old positions to the new ones if it is safe to do so, otherwise raises an Exception
+    #
+    def _move_claws(self, claw_bot, claw_bot_next, claw_top, claw_top_next):
+        # Check if new claws would collide with the wire
+        if self._flag_is_set(claw_bot_next, self.wire):
+            # TODO: Write custom exceptions for upper and lower violation
+            raise Exception
+        elif self._flag_is_set(claw_top_next, self.wire):
+            raise Exception
+
+        # Remove old claw flags
+        self._remove_flag(claw_bot, self.rotor_bot)
+        self._remove_flag(claw_top, self.rotor_top)
+        # Set new flags
+        self._set_flag(claw_bot_next, self.rotor_bot)
+        self._set_flag(claw_top_next, self.rotor_top)
+
+    #
     # runs a few tests
     #
     def test(self):
@@ -190,7 +296,8 @@ class SimulatedWorld(World):
 
         # Check if out of world x and y works
         print("Check if out of world x and y works")
-        out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1, self.__world.shape[1] - self.__state_size + 1]
+        out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1, self.__world.shape[1] -
+                                 self.__state_size + 1]
         print(self.get_state(out_of_world_y_coords))
 
         # Check if init state works
@@ -198,29 +305,6 @@ class SimulatedWorld(World):
         print("Check if init state works with coords: ", init_state_coords)
         print(self.get_state(init_state_coords))
 
-    #
-    # Moves the claws one unit to the right
-    #
-    def __move_right(self):
-        pass
-
-    def move_left(self):
-        pass
-
-    def move_right(self):
-        pass
-
-    def move_up(self):
-        pass
-
-    def move_down(self):
-        pass
-
-    def turn_clockwise(self):
-        pass
-
-    def turn_counter_clockwise(self):
-        pass
 
 if __name__ == '__main__':
     world = SimulatedWorld()
