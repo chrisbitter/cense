@@ -6,13 +6,16 @@ from Decider.action import Action
 
 
 class SimulatedWorld(World):
-
     # Array containing the current state of the world
     __world = np.zeros([5, 5])
     # Current position of the tool center point
     tcp_pos = [0, 0]
     # Static variable determining how big a state snapshot should be
     __state_size = 9
+    # Possible positions for the rotators, in order of clockwise rotation
+    # Currently hardcoded for a state size of 5 TODO: create these dynamically
+    positions_R_top = np.array([(0, 2), (1, 3), (2, 4), (3, 3), (4, 2), (3, 1), (2, 0), (1, 1)])
+    positions_R_bot = np.array([(4, 2), (3, 1), (2, 0), (1, 1), (0, 2), (1, 3), (2, 4), (3, 3)])
 
     def __init__(self, world_path=None):
         super().__init__()
@@ -29,10 +32,10 @@ class SimulatedWorld(World):
     #
     def __create_init_state(self):
         # Calculate the offset of the claws from the center point of a given state
-        tool_offset = math.floor(self.__state_size/2)
+        tool_offset = math.floor(self.__state_size / 2)
 
         # Calculate worlds center based on the assumption that the wire always starts in the middle of the image
-        center = math.floor(self.__world.shape[1]/2)
+        center = math.floor(self.__world.shape[1] / 2)
         self.tcp_pos = (0, center)
         if center < self.__state_size:
             print("Warning: image is to small to properly position claws")
@@ -86,11 +89,11 @@ class SimulatedWorld(World):
         # Make a list of all wire positions around the old goal
         list_of_wires = []
         # Calculate upper left of the current state based on the tool center point position
-        state_offset = [self.tcp_pos[0]-math.floor(self.__state_size/2), self.tcp_pos[1] +
-                        math.floor(self.__state_size/2)]
+        state_offset = [self.tcp_pos[0] - math.floor(self.__state_size / 2), self.tcp_pos[1] +
+                        math.floor(self.__state_size / 2)]
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                if self._flag_is_set([state_offset[1]+j, state_offset[0]+i], self.wire):
+                if self._flag_is_set([state_offset[1] + j, state_offset[0] + i], self.wire):
                     list_of_wires.append([i, j])
 
         # Clean list
@@ -135,16 +138,16 @@ class SimulatedWorld(World):
 
         # Claws always have to be in the middle of the state, so check if there is enough space to the left to do this
         init_state = False
-        if state_start_x <= math.floor(self.__state_size/2):
+        if state_start_x <= math.floor(self.__state_size / 2):
             # Not enough space, extend with out of world
             init_state = True
-            x_size = math.ceil(self.__state_size/2) + state_start_x
+            x_size = math.ceil(self.__state_size / 2) + state_start_x
 
         # Make sure the snapshot is within boundaries
-        if x_size+state_start_x > world_size_x:
+        if x_size + state_start_x > world_size_x:
             # x_offset is too close to the border, would try to copy nonexistent indices, adjust size of copy
             x_size = world_size_x - state_start_x
-        if y_size+state_start_y > world_size_y:
+        if y_size + state_start_y > world_size_y:
             # y_offset is too close to the border, would try to copy nonexistent indices, adjust size of copy
             y_size = world_size_y - state_start_y
 
@@ -164,10 +167,24 @@ class SimulatedWorld(World):
                 state = np.vstack((out_of_world_stack, state))
         if y_size < self.__state_size:
             # Y went out of world, extend towards the bottom
-            out_of_world_stack = np.zeros([state.shape[0], self.__state_size-y_size], dtype=np.uint8)
+            out_of_world_stack = np.zeros([state.shape[0], self.__state_size - y_size], dtype=np.uint8)
             out_of_world_stack.fill(self.out_of_world)
             state = np.hstack((state, out_of_world_stack))
         return state
+
+    #
+    # Returns the state around the tcp
+    #
+    def get_state_by_tcp(self):
+        state_position = self.get_current_state_coordinates()
+        return self.get_state(state_position)
+
+    #
+    # Calculates the coordinates of the upper left of the current state based on the tcp
+    #
+    def get_current_state_coordinates(self):
+        return [self.tcp_pos[0] - math.floor(self.__state_size / 2), self.tcp_pos[1] +
+                math.floor(self.__state_size / 2)]
 
     #
     # Moves the tcp one unit to it's right and adjusts the positions of the claws
@@ -233,11 +250,81 @@ class SimulatedWorld(World):
         # Align tool center point
         self.tcp_pos[1] -= 1
 
+    #
+    # Turns the tcp one unit clockwise
+    # Currently only implemented for a state size of 5
+    #
     def turn_clockwise(self):
-        pass
+        # Get the relative claw positions
+        claw_bot, claw_top = self.find_claw_positions()
+        state_offset = self.get_current_state_coordinates()
+        claw_bot[0] -= state_offset[0]
+        claw_bot[1] -= state_offset[1]
+        claw_top[0] -= state_offset[0]
+        claw_top[1] -= state_offset[1]
 
+        # Calculate the future positions of the claws
+        # Find position in the position list for top claw
+        for idx, pos in enumerate(self.positions_R_top):
+            if np.array_equal(pos, claw_top):
+                r_top_idx = idx
+        # Go to the next element and check for overflow
+        if r_top_idx == self.positions_R_top.shape[0] - 1:
+            claw_top_next = tuple(self.positions_R_top[0])
+        else:
+            claw_top_next = tuple(self.positions_R_top[r_top_idx + 1])
+
+        # Find position in the position list for bottom claw
+        for idx, pos in enumerate(self.positions_R_bot):
+            if np.array_equal(pos, claw_bot):
+                r_bot_idx = idx
+        # Go to the next element and check for overflow
+        if r_bot_idx == self.positions_R_top.shape[0] - 1:
+            claw_bot_next = tuple(self.positions_R_bot[0])
+        else:
+            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx + 1])
+
+        # Move the claws
+        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        # No need to adjust tcp, because it stays the same
+
+    #
+    # Turns the tcp one unit counter clockwise
+    # Currently only implemented for a state size of 5
+    #
     def turn_counter_clockwise(self):
-        pass
+        # Get the relative claw positions
+        claw_bot, claw_top = self.find_claw_positions()
+        state_offset = self.get_current_state_coordinates()
+        claw_bot[0] -= state_offset[0]
+        claw_bot[1] -= state_offset[1]
+        claw_top[0] -= state_offset[0]
+        claw_top[1] -= state_offset[1]
+
+        # Calculate the future positions of the claws
+        # Find position in the position list for top claw
+        for idx, pos in enumerate(self.positions_R_top):
+            if np.array_equal(pos, claw_top):
+                r_top_idx = idx
+        # Go to the next element and check for overflow
+        if r_top_idx == 0:
+            claw_top_next = tuple(self.positions_R_top[self.positions_R_top.shape[0]-1])
+        else:
+            claw_top_next = tuple(self.positions_R_top[r_top_idx-1])
+
+        # Find position in the position list for bottom claw
+        for idx, pos in enumerate(self.positions_R_bot):
+            if np.array_equal(pos, claw_bot):
+                r_bot_idx = idx
+        # Go to the next element and check for overflow
+        if r_bot_idx == 0:
+            claw_bot_next = tuple(self.positions_R_bot[self.positions_R_top.shape[0]-1])
+        else:
+            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx-1])
+
+        # Move the claws
+        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        # No need to adjust tcp, because it stays the same
 
     #
     # Returns the position of the bottom claw and the top claw
@@ -250,9 +337,9 @@ class SimulatedWorld(World):
         rotor_top, rotor_bot = (0, 0)
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                if self._flag_is_set([state_offset[1] + j, state_offset[0] + i], self.rotor_bot):
+                if self._flag_is_set([state_offset[0] + i, state_offset[1] + j], self.rotor_bot):
                     rotor_bot = [i, j]
-                elif self._flag_is_set([state_offset[1] + j, state_offset[0] + i], self.rotor_top):
+                elif self._flag_is_set([state_offset[0] + i, state_offset[1] + j], self.rotor_top):
                     rotor_top = [i, j]
         return rotor_bot, rotor_top
 
@@ -280,17 +367,19 @@ class SimulatedWorld(World):
     def test(self):
         print(self.__world.shape)
         # Check if in world states work
-        in_world_coords = [math.ceil(self.__world.shape[0]/2-self.__state_size/2), 0]
+        in_world_coords = [math.ceil(self.__world.shape[0] / 2 - self.__state_size / 2), 0]
         print("Check if in world coords work: ", in_world_coords)
         print(self.get_state(in_world_coords))
 
         # Check if out of world x works
-        out_of_world_x_coords = [ self.__world.shape[0]-self.__state_size, self.__world.shape[1]-self.__state_size + 1]
+        out_of_world_x_coords = [self.__world.shape[0] - self.__state_size,
+                                 self.__world.shape[1] - self.__state_size + 1]
         print("Check if out of world x coords work: ", out_of_world_x_coords)
         print(self.get_state(out_of_world_x_coords))
 
         # Check if out of world y works
-        out_of_world_y_coords = [self.__world.shape[0]-self.__state_size + 1, self.__world.shape[1]-self.__state_size]
+        out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1,
+                                 self.__world.shape[1] - self.__state_size]
         print("Check if out of world y coords work: ", out_of_world_y_coords)
         print(self.get_state(out_of_world_y_coords))
 
@@ -301,7 +390,7 @@ class SimulatedWorld(World):
         print(self.get_state(out_of_world_y_coords))
 
         # Check if init state works
-        init_state_coords = [0, math.floor(self.__world.shape[1]/2 - self.__state_size/2)]
+        init_state_coords = [0, math.floor(self.__world.shape[1] / 2 - self.__state_size / 2)]
         print("Check if init state works with coords: ", init_state_coords)
         print(self.get_state(init_state_coords))
 
