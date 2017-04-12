@@ -71,6 +71,7 @@ class LookupDecider(Decider):
     def update_q(self, state_old, state_new, action, reward):
         # Find maximum future q_value
         new_hash_code = str(state_new.hash_code())
+
         # Check for existing entries
         if new_hash_code in self.__lookup:
             max_future_q = np.max(self.__lookup[new_hash_code])
@@ -84,8 +85,13 @@ class LookupDecider(Decider):
         q_values = self.__lookup[str(hash_code)]
         updated_q_values = q_values[:]
 
+        if reward not in [10, 20, -10, -20]:  # non-terminal state
+            update = reward + (self.__gamma * max_future_q)
+        else:  # terminal state
+            update = reward
+
         # Update the q_values with the formula described in the CENSE paper
-        updated_q_values[action.value] = reward + (self.__gamma * max_future_q)
+        updated_q_values[action.value] = update
         self.__lookup[str(hash_code)] = updated_q_values
 
     #

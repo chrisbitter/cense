@@ -3,6 +3,7 @@ import numpy as np
 from World.world import World
 import math
 from Decider.action import Action
+from World.state import State
 
 
 class SimulatedWorld(World):
@@ -131,9 +132,9 @@ class SimulatedWorld(World):
         return goal
 
     #
-    # Returns the state with coordinates describing the upper left
+    # Returns a state Array with coordinates describing the upper left
     #
-    def get_state(self, coordinates):
+    def get_state_array(self, coordinates):
         # Create variables representing the upper left corner of the state
         state_start_x = coordinates[0]
         state_start_y = coordinates[1]
@@ -181,6 +182,19 @@ class SimulatedWorld(World):
             out_of_world_stack.fill(self.out_of_world)
             state = np.hstack((state, out_of_world_stack))
         return state
+
+    #
+    # Returns the state with coordinates describing the upper left
+    #
+    def get_state(self, coordinates):
+        return State(self.get_state_array(coordinates))
+
+    #
+    # Returns the state array around the tcp
+    #
+    def get_state_array_by_tcp(self):
+        state_position = self.get_current_state_coordinates()
+        return self.get_state_array(state_position)
 
     #
     # Returns the state around the tcp
@@ -259,6 +273,13 @@ class SimulatedWorld(World):
 
         # Align tool center point
         self.tcp_pos[1] -= 1
+
+    #
+    # Moves the tcp to a new location and copies the state into there
+    # TODO: implement
+    #
+    def move_tcp_and_change_world(self, tcp, state):
+        pass
 
     #
     # Turns the tcp one unit clockwise
@@ -456,30 +477,30 @@ class SimulatedWorld(World):
         # Check if in world states work
         in_world_coords = [math.ceil(self.__world.shape[0] / 2 - self.__state_size / 2), 0]
         print("Check if in world coords work: ", in_world_coords)
-        print(self.get_state(in_world_coords))
+        print(self.get_state_array(in_world_coords))
 
         # Check if out of world x works
         out_of_world_x_coords = [self.__world.shape[0] - self.__state_size,
                                  self.__world.shape[1] - self.__state_size + 1]
         print("Check if out of world x coords work: ", out_of_world_x_coords)
-        print(self.get_state(out_of_world_x_coords))
+        print(self.get_state_array(out_of_world_x_coords))
 
         # Check if out of world y works
         out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1,
                                  self.__world.shape[1] - self.__state_size]
         print("Check if out of world y coords work: ", out_of_world_y_coords)
-        print(self.get_state(out_of_world_y_coords))
+        print(self.get_state_array(out_of_world_y_coords))
 
         # Check if out of world x and y works
         print("Check if out of world x and y works")
         out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1, self.__world.shape[1] -
                                  self.__state_size + 1]
-        print(self.get_state(out_of_world_y_coords))
+        print(self.get_state_array(out_of_world_y_coords))
 
         # Check if init state works
         init_state_coords = [0, math.floor(self.__world.shape[1] / 2 - self.__state_size / 2)]
         print("Check if init state works with coords: ", init_state_coords)
-        print(self.get_state(init_state_coords))
+        print(self.get_state_array(init_state_coords))
 
 
 class WireCollisionException(Exception):
