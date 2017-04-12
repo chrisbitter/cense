@@ -16,6 +16,8 @@ class SimulatedWorld(World):
     # Currently hardcoded for a state size of 5 TODO: create these dynamically
     positions_R_top = np.array([(0, 2), (1, 3), (2, 4), (3, 3), (4, 2), (3, 1), (2, 0), (1, 1)])
     positions_R_bot = np.array([(4, 2), (3, 1), (2, 0), (1, 1), (0, 2), (1, 3), (2, 4), (3, 3)])
+    # Coordinates of the final goal the agent should reach
+    last_goal = (0, 0)
 
     def __init__(self, world_path=None):
         super().__init__()
@@ -31,13 +33,17 @@ class SimulatedWorld(World):
     # Initiates the claws and the first goal
     #
     def __create_init_state(self):
+        # Calculate final goal
+        for i in range(self.__world.shape[1] - 1):
+            if self._flag_is_set((self.__world.shape[0] - 1, i), self.wire):
+                self.last_goal = (self.__world.shape[0] - 1, i)
         # Calculate the offset of the claws from the center point of a given state
         tool_offset = math.floor(self.__state_size / 2)
 
         # Calculate worlds center based on the assumption that the wire always starts in the middle of the image
         center = math.floor(self.__world.shape[1] / 2)
         self.tcp_pos = (0, center)
-        if center < math.floor(self.__state_size/2):
+        if center < math.floor(self.__state_size / 2):
             print("Warning: image is to small to properly position claws")
 
         # Calculate initial claw positions based on the worlds center and the previously calculated offset
@@ -48,7 +54,7 @@ class SimulatedWorld(World):
 
         # Set initial goal
         goal_pos = (tool_offset, center)
-        self._set_flag(goal_pos, self.goal)
+        self._add_flag(goal_pos, self.goal)
 
     #
     # Sets a flag while maintaining all other flags that have been set
@@ -201,7 +207,7 @@ class SimulatedWorld(World):
         claw_top_next = (claw_top[0] + 1, claw_top[1])
 
         # Move the claws
-        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
 
         # Align tool center point
         self.tcp_pos[0] += 1
@@ -217,7 +223,7 @@ class SimulatedWorld(World):
         claw_top_next = (claw_top[0] - 1, claw_top[1])
 
         # Move the claws
-        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
 
         # Align tool center point
         self.tcp_pos[0] -= 1
@@ -233,7 +239,7 @@ class SimulatedWorld(World):
         claw_top_next = (claw_top[0], claw_top[1] + 1)
 
         # Move the claws
-        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
 
         # Align tool center point
         self.tcp_pos[1] += 1
@@ -249,7 +255,7 @@ class SimulatedWorld(World):
         claw_top_next = (claw_top[0], claw_top[1] - 1)
 
         # Move the claws
-        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
 
         # Align tool center point
         self.tcp_pos[1] -= 1
@@ -289,7 +295,7 @@ class SimulatedWorld(World):
             claw_bot_next = tuple(self.positions_R_bot[r_bot_idx + 1])
 
         # Move the claws
-        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
         # No need to adjust tcp, because it stays the same
 
     #
@@ -312,9 +318,9 @@ class SimulatedWorld(World):
                 r_top_idx = idx
         # Go to the next element and check for overflow
         if r_top_idx == 0:
-            claw_top_next = tuple(self.positions_R_top[self.positions_R_top.shape[0]-1])
+            claw_top_next = tuple(self.positions_R_top[self.positions_R_top.shape[0] - 1])
         else:
-            claw_top_next = tuple(self.positions_R_top[r_top_idx-1])
+            claw_top_next = tuple(self.positions_R_top[r_top_idx - 1])
 
         # Find position in the position list for bottom claw
         for idx, pos in enumerate(self.positions_R_bot):
@@ -322,12 +328,12 @@ class SimulatedWorld(World):
                 r_bot_idx = idx
         # Go to the next element and check for overflow
         if r_bot_idx == 0:
-            claw_bot_next = tuple(self.positions_R_bot[self.positions_R_top.shape[0]-1])
+            claw_bot_next = tuple(self.positions_R_bot[self.positions_R_top.shape[0] - 1])
         else:
-            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx-1])
+            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx - 1])
 
         # Move the claws
-        self._move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
         # No need to adjust tcp, because it stays the same
 
     #
@@ -350,13 +356,27 @@ class SimulatedWorld(World):
     #
     # Moves the claws from the old positions to the new ones if it is safe to do so, otherwise raises an Exception
     #
-    def _move_claws(self, claw_bot, claw_bot_next, claw_top, claw_top_next):
+    def __move_claws(self, claw_bot, claw_bot_next, claw_top, claw_top_next):
+        # Check if new position would be out of map
+        next_positions = [claw_top_next, claw_bot_next]
+
+        # Upper boundaries
+        for next_position in next_positions:
+            if self.__world.shape[0] < next_position[0]:
+                raise ClawOutOfWorldException
+            if self.__world.shape[1] < next_position[1]:
+                raise ClawOutOfWorldException
+
+        # Lower boundaries
+        for next_position in next_positions:
+            for i in next_position:
+                if i < 0:
+                    raise ClawOutOfWorldException
+
         # Check if new claws would collide with the wire
-        if self._flag_is_set(claw_bot_next, self.wire):
-            # TODO: Write custom exceptions for upper and lower violation
-            raise Exception
-        elif self._flag_is_set(claw_top_next, self.wire):
-            raise Exception
+        for next_position in next_positions:
+            if self._flag_is_set(next_position, self.wire):
+                raise WireCollisionException
 
         # Remove old claw flags
         self._remove_flag(claw_bot, self.rotor_bot)
@@ -366,7 +386,70 @@ class SimulatedWorld(World):
         self._set_flag(claw_top_next, self.rotor_top)
 
     #
-    # runs a few tests
+    # Returns true if a goal has been reached otherwise false
+    #
+    def goal_reached(self):
+        if self._flag_is_set(self.tcp_pos, self.goal):
+            return True
+        else:
+            return False
+
+    #
+    # Calculates and returns the reward for the last move made
+    # Should only be executed before replacing the goal
+    #
+    def calculate_reward(self):
+        # TODO: Check if space between claws is empty
+        # Probably by drawing a line between the two claws and calculating all points between
+        # Then return -20
+        if self.goal_reached():
+            if self.tcp_pos == self.last_goal:
+                return 20
+            else:
+                return 10
+        else:
+            return -1
+
+    #
+    # Executes an action and returns the reward of that action
+    #
+    def make_move(self, action):
+        # Execute action
+        try:
+            if action == Action.UP:
+                self.move_up()
+            elif action == Action.DOWN:
+                self.move_down()
+            elif action == Action.LEFT:
+                self.move_left()
+            elif action == Action.RIGHT:
+                self.move_right()
+            elif action == Action.ROTATE_CLOCKWISE:
+                self.turn_clockwise()
+            elif action == Action.ROTATE_COUNTER_CLOCKWISE:
+                self.turn_counter_clockwise()
+        # Catch exceptions
+        except ClawOutOfWorldException:
+            return -10
+        except WireCollisionException:
+            return -10
+
+        # Calculate reward
+        reward = self.calculate_reward()
+
+        # Check if we need to set a new goal
+        if self.goal_reached():
+            # Find new goal
+            new_goal = self.find_new_goal(action)
+            # Remove old goal
+            self._remove_flag(self.tcp_pos, self.goal)
+            # Set new goal
+            self._add_flag(new_goal, self.goal)
+
+        return reward
+
+    #
+    # Runs a few tests
     #
     def test(self):
         print(self.__world.shape)
@@ -398,6 +481,17 @@ class SimulatedWorld(World):
         print("Check if init state works with coords: ", init_state_coords)
         print(self.get_state(init_state_coords))
 
+
+class WireCollisionException(Exception):
+    pass
+
+
+class ClawFreedFromWireException(Exception):
+    pass
+
+
+class ClawOutOfWorldException(Exception):
+    pass
 
 if __name__ == '__main__':
     world = SimulatedWorld()
