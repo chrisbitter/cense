@@ -29,5 +29,6 @@ class RealWorld(World):
     def go_to_coordinates(self, coordinates):
         pass
 
+    # Bla commit test
     def reset(self):
         pass
