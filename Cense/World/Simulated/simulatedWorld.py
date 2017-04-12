@@ -43,6 +43,9 @@ class SimulatedWorld(World):
 
         # Calculate worlds center based on the assumption that the wire always starts in the middle of the image
         center = math.floor(self.__world.shape[1] / 2)
+        for i in range(self.__world.shape[1]):
+            if self._flag_is_set([0, i], self.wire):
+                center = i
         self.tcp_pos = (0, center)
         if center < math.floor(self.__state_size / 2):
             print("Warning: image is to small to properly position claws")

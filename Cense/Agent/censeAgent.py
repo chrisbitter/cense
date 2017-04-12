@@ -62,7 +62,7 @@ class Agent:
         rewards = []
         i = 0
 
-        state = self.world.get_state()
+        state = self.world.get_state_by_tcp()
         # disp_state(state, center_coord, action=None, reward=None, i=i, init=True)
         status = 1
         while status == 1:
