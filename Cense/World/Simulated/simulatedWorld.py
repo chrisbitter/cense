@@ -19,7 +19,10 @@ class SimulatedWorld(World):
     positions_R_bot = np.array([(4, 2), (3, 1), (2, 0), (1, 1), (0, 2), (1, 3), (2, 4), (3, 3)])
     # Coordinates of the final goal the agent should reach
     last_goal = (0, 0)
+    # Coordinates of the current goal
+    current_goal = (0, 0)
 
+    # Tested
     def __init__(self, world_path=None):
         super().__init__()
         if world_path is not None:
@@ -32,12 +35,15 @@ class SimulatedWorld(World):
 
     #
     # Initiates the claws and the first goal
+    # Tested
     #
     def __create_init_state(self):
+        print("Initializing world")
         # Calculate final goal
         for i in range(self.__world.shape[1] - 1):
             if self._flag_is_set((self.__world.shape[0] - 1, i), self.wire):
                 self.last_goal = (self.__world.shape[0] - 1, i)
+                print("Final goal found at: " + str(self.last_goal))
         # Calculate the offset of the claws from the center point of a given state
         tool_offset = math.floor(self.__state_size / 2)
 
@@ -46,22 +52,26 @@ class SimulatedWorld(World):
         for i in range(self.__world.shape[1]):
             if self._flag_is_set([0, i], self.wire):
                 center = i
-        self.tcp_pos = (0, center)
+        self.tcp_pos = [0, center]
+        print("Tool center point positioned at: " + str(self.tcp_pos))
         if center < math.floor(self.__state_size / 2):
             print("Warning: image is to small to properly position claws")
 
         # Calculate initial claw positions based on the worlds center and the previously calculated offset
-        upper_claw_pos = (0, (center - tool_offset))
-        lower_claw_pos = (0, (center + tool_offset))
-        self._set_flag(upper_claw_pos, self.rotor_top)
-        self._set_flag(lower_claw_pos, self.rotor_bot)
+        upper_claw_pos = (0, (center + tool_offset))
+        lower_claw_pos = (0, (center - tool_offset))
+        print("Upper claw positioned at: " + str(upper_claw_pos) + "\nLower claw positioned at: " + str(lower_claw_pos))
+        self._add_flag(upper_claw_pos, self.rotor_top)
+        self._add_flag(lower_claw_pos, self.rotor_bot)
 
         # Set initial goal
-        goal_pos = (tool_offset, center)
-        self._add_flag(goal_pos, self.goal)
+        self.current_goal = (tool_offset, center)
+        print("Initial goal positioned at: " + str(self.current_goal))
+        self._add_flag(self.current_goal, self.goal)
 
     #
     # Sets a flag while maintaining all other flags that have been set
+    # Tested
     #
     def _add_flag(self, position, state):
         if not self._flag_is_set(position, state):
@@ -76,14 +86,18 @@ class SimulatedWorld(World):
 
     #
     # Sets a flag while removing all other set flags
+    # Tested
     #
     def _set_flag(self, position, state):
         self.__world[position[0], position[1]] = state
 
     #
     # Function that checks whether a flag is set in a given position
+    # Tested
     #
     def _flag_is_set(self, position, state):
+        if self.is_out_of_world(position):
+            return False
         status = self.__world[position[0], position[1]]
         # Bit shift both bytes until the flag is in the first bit
         while state != 1:
@@ -97,45 +111,58 @@ class SimulatedWorld(World):
             return False
 
     #
+    # Checks if a position is out world
+    # Returns True if so, otherwise False
+    #
+    def is_out_of_world(self, position):
+        if position[0] >= self.__world.shape[0] or position[0] < 0:
+            return True
+        if position[1] >= self.__world.shape[1] or position[1] < 0:
+            return True
+        return False
+
+    #
     # returns coordinates of a new goal based on the coordinates of the old goal
     #
     def find_new_goal(self, previous_action):
         # Make a list of all wire positions around the old goal
         list_of_wires = []
         # Calculate upper left of the current state based on the tool center point position
-        state_offset = [self.tcp_pos[0] - math.floor(self.__state_size / 2), self.tcp_pos[1] +
-                        math.floor(self.__state_size / 2)]
+        state_offset = self.get_current_state_coordinates()
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                if self._flag_is_set([state_offset[1] + j, state_offset[0] + i], self.wire):
-                    list_of_wires.append([i, j])
+                check_pos = [state_offset[0] + i, state_offset[1] - j]
+                if self._flag_is_set(check_pos, self.wire):
+                    list_of_wires.append([i, -j])
+        list_of_wires = np.array(list_of_wires)
 
         # Clean list
         if previous_action == Action.UP:
-            list_of_wires = list_of_wires[list_of_wires[:, 0] <= 2]
+            list_of_wires = list_of_wires[list_of_wires[:, 1] >= -2]
         if previous_action == Action.DOWN:
-            list_of_wires = list_of_wires[list_of_wires[:, 0] >= 2]
+            list_of_wires = list_of_wires[list_of_wires[:, 1] <= -2]
         if previous_action == Action.LEFT:
-            list_of_wires = list_of_wires[list_of_wires[:, 1] <= 2]
+            list_of_wires = list_of_wires[list_of_wires[:, 0] <= 2]
         if previous_action == Action.RIGHT:
-            list_of_wires = list_of_wires[list_of_wires[:, 1] >= 2]
+            list_of_wires = list_of_wires[list_of_wires[:, 0] >= 2]
 
         # Calculate distance from original point to each potential goal
         distance_list = []
         for wire in list_of_wires:
-            x_dist = np.abs(2 - wire[0])
-            y_dist = np.abs(2 - wire[1])
+            x_dist = np.abs(wire[0] - 2)
+            y_dist = np.abs(wire[1] + 2)
             dist = x_dist + y_dist
             distance_list.append(dist)
 
         # Pick the potential goal with the highest distance
         goal_index = np.argmax(distance_list)
         goal_relative = list_of_wires[goal_index]
-        goal = np.sum(goal_relative, state_offset)
+        goal = (goal_relative[0] + state_offset[0], goal_relative[1] + state_offset[1])
         return goal
 
     #
     # Returns a state Array with coordinates describing the upper left
+    # Tested
     #
     def get_state_array(self, coordinates):
         # Create variables representing the upper left corner of the state
@@ -151,11 +178,12 @@ class SimulatedWorld(World):
         y_size = self.__state_size
 
         # Claws always have to be in the middle of the state, so check if there is enough space to the left to do this
-        init_state = False
-        if state_start_x <= math.floor(self.__state_size / 2):
+        out_of_world_left = False
+        if state_start_x < 0:
             # Not enough space, extend with out of world
-            init_state = True
-            x_size = math.ceil(self.__state_size / 2) + state_start_x
+            out_of_world_left = True
+            # Calculate the size of the state
+            x_size = self.__state_size + state_start_x
 
         # Make sure the snapshot is within boundaries
         if x_size + state_start_x > world_size_x:
@@ -165,19 +193,22 @@ class SimulatedWorld(World):
             # y_offset is too close to the border, would try to copy nonexistent indices, adjust size of copy
             y_size = world_size_y - state_start_y
 
+        # if the state would be out of world on the left always start copying from the leftmost column
+        if out_of_world_left:
+            state_start_x = 0
         # Do the copy of the selected area
-        state = self.__world[state_start_x:state_start_x + x_size, state_start_y:state_start_y + y_size]
+        state = self.__world[state_start_x:state_start_x + x_size, state_start_y - y_size+1:state_start_y+1]
 
         # Fill the resized area with out of world Flag
         if x_size < self.__state_size:
             # Create filler Array
             out_of_world_stack = np.zeros([self.__state_size - x_size, state.shape[1]], dtype=np.uint8)
             out_of_world_stack.fill(self.out_of_world)
-            if not init_state:
-                # X went out of world, extend towards the right
+            if not out_of_world_left:
+                # X went out of world on the right, extend towards the right
                 state = np.vstack((state, out_of_world_stack))
             else:
-                # X is smaller because we are in the initial state where we have to extend to the left
+                # X went out of world on the left, extend towards the left
                 state = np.vstack((out_of_world_stack, state))
         if y_size < self.__state_size:
             # Y went out of world, extend towards the bottom
@@ -188,12 +219,14 @@ class SimulatedWorld(World):
 
     #
     # Returns the state with coordinates describing the upper left
+    # Tested
     #
     def get_state(self, coordinates):
         return State(self.get_state_array(coordinates))
 
     #
     # Returns the state array around the tcp
+    # Tested
     #
     def get_state_array_by_tcp(self):
         state_position = self.get_current_state_coordinates()
@@ -201,6 +234,7 @@ class SimulatedWorld(World):
 
     #
     # Returns the state around the tcp
+    # Tested
     #
     def get_state_by_tcp(self):
         state_position = self.get_current_state_coordinates()
@@ -208,13 +242,17 @@ class SimulatedWorld(World):
 
     #
     # Calculates the coordinates of the upper left of the current state based on the tcp
+    # Tested
     #
     def get_current_state_coordinates(self):
-        return [self.tcp_pos[0] - math.floor(self.__state_size / 2), self.tcp_pos[1] +
-                math.floor(self.__state_size / 2)]
+        x_coordinate = self.tcp_pos[0] - math.floor(self.__state_size / 2)
+        y_coordinate = self.tcp_pos[1] + math.floor(self.__state_size / 2)
+        coordinates = [x_coordinate, y_coordinate]
+        return coordinates
 
     #
     # Moves the tcp one unit to it's right and adjusts the positions of the claws
+    # Tested
     #
     def move_right(self):
         claw_bot, claw_top = self.find_claw_positions()
@@ -231,6 +269,7 @@ class SimulatedWorld(World):
 
     #
     # Moves the tcp one unit to it's left and adjusts the positions of the claws
+    # Tested
     #
     def move_left(self):
         claw_bot, claw_top = self.find_claw_positions()
@@ -247,6 +286,7 @@ class SimulatedWorld(World):
 
     #
     # Moves the tcp one unit upwards and adjusts the positions of the claws
+    # Tested
     #
     def move_up(self):
         claw_bot, claw_top = self.find_claw_positions()
@@ -263,6 +303,7 @@ class SimulatedWorld(World):
 
     #
     # Moves the tcp one unit downwards and adjusts the positions of the claws
+    # Tested
     #
     def move_down(self):
         claw_bot, claw_top = self.find_claw_positions()
@@ -279,10 +320,26 @@ class SimulatedWorld(World):
 
     #
     # Moves the tcp to a new location and copies the state into there
-    # TODO: implement
     #
     def move_tcp_and_change_world(self, tcp, state):
-        pass
+        # Find current claw positions
+        claw_pos = self.find_claw_positions()
+        # Remove current goal and claw flags
+        self._remove_flag(claw_pos[0], self.rotor_bot)
+        self._remove_flag(claw_pos[1], self.rotor_top)
+        self._remove_flag(self.current_goal, self.goal)
+        # Move tcp
+        self.tcp_pos = tcp
+        # Reconstruct state
+        state_offset = self.get_current_state_coordinates()
+        for i in range(self.__state_size):
+            for j in range(self.__state_size):
+                position = (state_offset[0] + i, state_offset[1] + j)
+                # Copy state
+                self._set_flag(position, state[i][j])
+                # Simultaneously search for goal
+                if self._flag_is_set(position, self.goal):
+                    self.current_goal = position
 
     #
     # Turns the tcp one unit clockwise
@@ -299,6 +356,7 @@ class SimulatedWorld(World):
 
         # Calculate the future positions of the claws
         # Find position in the position list for top claw
+        r_bot_idx = r_top_idx = 0
         for idx, pos in enumerate(self.positions_R_top):
             if np.array_equal(pos, claw_top):
                 r_top_idx = idx
@@ -337,6 +395,7 @@ class SimulatedWorld(World):
 
         # Calculate the future positions of the claws
         # Find position in the position list for top claw
+        r_top_idx = r_bot_idx = 0
         for idx, pos in enumerate(self.positions_R_top):
             if np.array_equal(pos, claw_top):
                 r_top_idx = idx
@@ -362,33 +421,36 @@ class SimulatedWorld(World):
 
     #
     # Returns the position of the bottom claw and the top claw
+    # Tested
     #
     def find_claw_positions(self):
         # Calculate upper left of the current state based on the tool center point position
-        state_offset = [self.tcp_pos[0] - math.floor(self.__state_size / 2), self.tcp_pos[1] +
-                        math.floor(self.__state_size / 2)]
+        state_offset = self.get_current_state_coordinates()
         # Search for the lower and the upper claw
-        rotor_top, rotor_bot = (0, 0)
+        rotor_top = rotor_bot = (0, 0)
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                if self._flag_is_set([state_offset[0] + i, state_offset[1] + j], self.rotor_bot):
-                    rotor_bot = [i, j]
-                elif self._flag_is_set([state_offset[0] + i, state_offset[1] + j], self.rotor_top):
-                    rotor_top = [i, j]
+                check_pos = [state_offset[0] + i, state_offset[1] - j]
+                if self._flag_is_set(check_pos, self.rotor_bot):
+                    rotor_bot = check_pos
+                elif self._flag_is_set(check_pos, self.rotor_top):
+                    rotor_top = check_pos
         return rotor_bot, rotor_top
 
     #
     # Moves the claws from the old positions to the new ones if it is safe to do so, otherwise raises an Exception
+    # Tested
     #
+    # noinspection PyUnresolvedReferences
     def __move_claws(self, claw_bot, claw_bot_next, claw_top, claw_top_next):
         # Check if new position would be out of map
         next_positions = [claw_top_next, claw_bot_next]
 
         # Upper boundaries
         for next_position in next_positions:
-            if self.__world.shape[0] < next_position[0]:
+            if self.__world.shape[0] <= next_position[0]:
                 raise ClawOutOfWorldException
-            if self.__world.shape[1] < next_position[1]:
+            if self.__world.shape[1] <= next_position[1]:
                 raise ClawOutOfWorldException
 
         # Lower boundaries
@@ -423,9 +485,28 @@ class SimulatedWorld(World):
     # Should only be executed before replacing the goal
     #
     def calculate_reward(self):
-        # TODO: Check if space between claws is empty
-        # Probably by drawing a line between the two claws and calculating all points between
-        # Then return -20
+        # Check if space between the claws is empty
+        # Calculate gradient of the function
+        claws = self.find_claw_positions()
+        wire_found = False
+        # If the top claw isn't directly above the bottom claw calculate the points between with a linear function
+        if not claws[0][0] == claws[1][0]:
+            m = (claws[0][1] - claws[1][1]) / (claws[0][0] - claws[1][0])
+            # Set offset
+            b = claws[0][1]
+            # Check if there is a point containing a wire
+            for i in range(0, claws[0][0] - claws[1][0]):
+                if self._flag_is_set((i, round(m * i + b)), self.wire):
+                    wire_found = True
+        # If claws are placed above each other, search in a vertical line
+        else:
+            for i in range(claws[0][1], claws[1][1]):
+                if self._flag_is_set((claws[0][0], i), self.wire):
+                    wire_found = True
+        # Wire not found return -20, agent left the area it's supposed to operate in
+        if not wire_found:
+            return -20
+
         if self.goal_reached():
             if self.tcp_pos == self.last_goal:
                 return 20
@@ -465,10 +546,12 @@ class SimulatedWorld(World):
         if self.goal_reached():
             # Find new goal
             new_goal = self.find_new_goal(action)
-            # Remove old goal
+            # Remove old goal flag
             self._remove_flag(self.tcp_pos, self.goal)
-            # Set new goal
+            # Set new goal flag
             self._add_flag(new_goal, self.goal)
+            # Set new current goal
+            self.current_goal = new_goal
 
         return reward
 
@@ -476,34 +559,44 @@ class SimulatedWorld(World):
     # Runs a few tests
     #
     def test(self):
-        print(self.__world.shape)
-        # Check if in world states work
-        in_world_coords = [math.ceil(self.__world.shape[0] / 2 - self.__state_size / 2), 0]
-        print("Check if in world coords work: ", in_world_coords)
-        print(self.get_state_array(in_world_coords))
+        print("World shape = " + str(self.__world.shape))
+        # # Check if in world states work
+        # in_world_coords = [math.ceil(self.__world.shape[0] / 2 - self.__state_size / 2), 0]
+        # print("Check if in world coords work: ", in_world_coords)
+        # print(self.get_state_array(in_world_coords))
+        #
+        # # Check if out of world x works
+        # out_of_world_x_coords = [self.__world.shape[0] - self.__state_size,
+        #                          self.__world.shape[1] - self.__state_size + 1]
+        # print("Check if out of world x coords work: ", out_of_world_x_coords)
+        # print(self.get_state_array(out_of_world_x_coords))
+        #
+        # # Check if out of world y works
+        # out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1,
+        #                          self.__world.shape[1] - self.__state_size]
+        # print("Check if out of world y coords work: ", out_of_world_y_coords)
+        # print(self.get_state_array(out_of_world_y_coords))
+        #
+        # # Check if out of world x and y works
+        # print("Check if out of world x and y works")
+        # out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1, self.__world.shape[1] -
+        #                          self.__state_size + 1]
+        # print(self.get_state_array(out_of_world_y_coords))
+        #
+        # # Check if init state works
+        # init_state_coords = [0, math.floor(self.__world.shape[1] / 2 - self.__state_size / 2)]
+        # print("Check if init state works with coords: ", init_state_coords)
+        # print(self.get_state_array(init_state_coords))
+        # print("\n")
 
-        # Check if out of world x works
-        out_of_world_x_coords = [self.__world.shape[0] - self.__state_size,
-                                 self.__world.shape[1] - self.__state_size + 1]
-        print("Check if out of world x coords work: ", out_of_world_x_coords)
-        print(self.get_state_array(out_of_world_x_coords))
-
-        # Check if out of world y works
-        out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1,
-                                 self.__world.shape[1] - self.__state_size]
-        print("Check if out of world y coords work: ", out_of_world_y_coords)
-        print(self.get_state_array(out_of_world_y_coords))
-
-        # Check if out of world x and y works
-        print("Check if out of world x and y works")
-        out_of_world_y_coords = [self.__world.shape[0] - self.__state_size + 1, self.__world.shape[1] -
-                                 self.__state_size + 1]
-        print(self.get_state_array(out_of_world_y_coords))
-
-        # Check if init state works
-        init_state_coords = [0, math.floor(self.__world.shape[1] / 2 - self.__state_size / 2)]
-        print("Check if init state works with coords: ", init_state_coords)
-        print(self.get_state_array(init_state_coords))
+        # Check if get state by tcp works
+        print("\n")
+        self.move_right()
+        self.move_right()
+        print(str(self.get_state_by_tcp()) + "\n")
+        print("reward : " + str(self.calculate_reward()))
+        # print(self.get_state_by_tcp())
+        print(self.find_new_goal(Action.RIGHT))
 
 
 class WireCollisionException(Exception):
@@ -516,6 +609,7 @@ class ClawFreedFromWireException(Exception):
 
 class ClawOutOfWorldException(Exception):
     pass
+
 
 if __name__ == '__main__':
     world = SimulatedWorld()

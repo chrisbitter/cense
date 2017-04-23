@@ -34,8 +34,8 @@ def create_wire_from_file(file_path=sys.path[2] + '/Resources/wires/Cense_wire_0
     # Turn around all lines
     for i in range(wire_arr.shape[0]):
         wire_arr_temp[i] = wire_arr[i][::-1]
-    wire_arr = np.fliplr(np.flipud(wire_arr_temp.T))
-
+    # wire_arr = np.fliplr(np.flipud(wire_arr_temp.T))
+    wire_arr = np.fliplr(wire_arr_temp.T)
     if debug:
         plt.imshow(wire_arr)
         plt.show()
