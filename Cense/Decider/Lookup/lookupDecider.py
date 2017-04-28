@@ -1,4 +1,4 @@
-import Decider.decider
+from Decider.decider import Decider
 import json
 import numpy as np
 from Decider.action import Action
@@ -32,8 +32,11 @@ class LookupDecider(Decider):
         self.__gamma = gamma
         self.set_epsilon(epsilon)
         # Open lookup table
-        with open(lookup_file, 'r') as fp:
-            self.__lookup = json.load(fp)
+        try:
+            with open(lookup_file, 'r') as fp:
+                self.__lookup = json.load(fp)
+        except FileNotFoundError:
+            pass
 
     #
     # Persists the lookup table into a json file.
@@ -54,16 +57,18 @@ class LookupDecider(Decider):
     #
     def decide(self, state):
         hash_code = state.hash_code()
-        # Check if we should do a random action
-        if np.random.random(1) < self.__epsilon:
+        # Check if state has an entry, if not create one and return random action
+        if not str(hash_code) in self.__lookup:
+            print("creating new entry for key: " + str(hash_code))
+            self.__lookup[str(hash_code)] = np.zeros(len([(action.value, action.name) for action in Action])).tolist()
             return Action.get_random_action()
-        # Check if there is already an entry for this particular state in the table
-        elif str(hash_code) in self.__lookup:
+        # Check if we should do a random action
+        elif np.random.random(1) < self.__epsilon:
+            return Action.get_random_action()
+        # if there is already an entry for this particular state in the table return the corresponding action
+        else:
             return Action(np.argmax(self.__lookup[str(hash_code)]))
         # Return a random action and create an initial entry in the lookup_table for this state
-        else:
-            self.__lookup[str(hash_code)] = np.zeros(len([list(Action)]))
-            return Action.get_random_action()
 
     #
     # Updates the Q-value in the lookup table for a specific state and action
@@ -77,12 +82,12 @@ class LookupDecider(Decider):
             max_future_q = np.max(self.__lookup[new_hash_code])
         else:
             # Create initial entry
-            self.__lookup[new_hash_code] = np.zeros(len([list(Action)]))
+            self.__lookup[new_hash_code] = np.zeros(len([(action.value, action.name) for action in Action])).tolist()
             max_future_q = 0
 
         # Get q_values of the old state
         hash_code = state_old.hash_code()
-        q_values = self.__lookup[str(hash_code)]
+        q_values = np.array(self.__lookup[str(hash_code)])
         updated_q_values = q_values[:]
 
         if reward not in [10, 20, -10, -20]:  # non-terminal state
@@ -92,7 +97,7 @@ class LookupDecider(Decider):
 
         # Update the q_values with the formula described in the CENSE paper
         updated_q_values[action.value] = update
-        self.__lookup[str(hash_code)] = updated_q_values
+        self.__lookup[str(hash_code)] = updated_q_values.tolist()
 
     #
     # Sets new epsilon value

@@ -12,7 +12,7 @@ world_resolution = 25, 15
 # First and second dimensions being the coordinates of the pixel
 # Third dimension being either 1 or 0 where a 1 represents the wire and a 0 represents the background
 #
-def create_wire_from_file(file_path=sys.path[2] + '/../Resources/wires/Cense_wire_01.png', debug=False):
+def create_wire_from_file(file_path=sys.path[2] + '/Resources/wires/Cense_wire_01.png', debug=False):
 
     # Read image and export it as numpy array
     image = Image.open(file_path)
