@@ -131,9 +131,9 @@ class SimulatedWorld(World):
         state_offset = self.get_current_state_coordinates()
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                check_pos = [state_offset[0] + i, state_offset[1] - j]
+                check_pos = [state_offset[0] + i, state_offset[1] + j]
                 if self._flag_is_set(check_pos, self.wire):
-                    list_of_wires.append([i, -j])
+                    list_of_wires.append([i, j])
         list_of_wires = np.array(list_of_wires)
 
         # Clean list
@@ -149,8 +149,8 @@ class SimulatedWorld(World):
         # Calculate distance from original point to each potential goal
         distance_list = []
         for wire in list_of_wires:
-            x_dist = np.abs(wire[0] - 2)
-            y_dist = np.abs(wire[1] + 2)
+            x_dist = np.abs(self.tcp_pos[0] - (state_offset[0] + wire[0]))
+            y_dist = np.abs(self.tcp_pos[1] - (state_offset[1] + wire[1]))
             dist = x_dist + y_dist
             distance_list.append(dist)
 
@@ -161,7 +161,7 @@ class SimulatedWorld(World):
         return goal
 
     #
-    # Returns a state Array with coordinates describing the upper left
+    # Returns a state Array with coordinates describing the lower left
     # Tested
     #
     def get_state_array(self, coordinates):
@@ -197,7 +197,7 @@ class SimulatedWorld(World):
         if out_of_world_left:
             state_start_x = 0
         # Do the copy of the selected area
-        state = self.__world[state_start_x:state_start_x + x_size, state_start_y - y_size+1:state_start_y+1]
+        state = self.__world[state_start_x:state_start_x + x_size, state_start_y:state_start_y + y_size]
 
         # Fill the resized area with out of world Flag
         if x_size < self.__state_size:
@@ -246,7 +246,7 @@ class SimulatedWorld(World):
     #
     def get_current_state_coordinates(self):
         x_coordinate = self.tcp_pos[0] - math.floor(self.__state_size / 2)
-        y_coordinate = self.tcp_pos[1] + math.floor(self.__state_size / 2)
+        y_coordinate = self.tcp_pos[1] - math.floor(self.__state_size / 2)
         coordinates = [x_coordinate, y_coordinate]
         return coordinates
 
@@ -360,24 +360,26 @@ class SimulatedWorld(World):
         for idx, pos in enumerate(self.positions_R_top):
             if np.array_equal(pos, claw_top):
                 r_top_idx = idx
+                break
         # Go to the next element and check for overflow
         if r_top_idx == self.positions_R_top.shape[0] - 1:
-            claw_top_next = tuple(self.positions_R_top[0])
+            claw_top_next = np.add(state_offset, self.positions_R_top[0])
         else:
-            claw_top_next = tuple(self.positions_R_top[r_top_idx + 1])
+            claw_top_next = np.add(state_offset, self.positions_R_top[r_top_idx + 1])
 
         # Find position in the position list for bottom claw
         for idx, pos in enumerate(self.positions_R_bot):
             if np.array_equal(pos, claw_bot):
                 r_bot_idx = idx
+                break
         # Go to the next element and check for overflow
         if r_bot_idx == self.positions_R_top.shape[0] - 1:
-            claw_bot_next = tuple(self.positions_R_bot[0])
+            claw_bot_next = np.add(state_offset, self.positions_R_bot[0])
         else:
-            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx + 1])
+            claw_bot_next = np.add(state_offset, self.positions_R_bot[r_bot_idx + 1])
 
         # Move the claws
-        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(np.add(state_offset, claw_bot), claw_bot_next, np.add(state_offset, claw_top), claw_top_next)
         # No need to adjust tcp, because it stays the same
 
     #
@@ -401,9 +403,9 @@ class SimulatedWorld(World):
                 r_top_idx = idx
         # Go to the next element and check for overflow
         if r_top_idx == 0:
-            claw_top_next = tuple(self.positions_R_top[self.positions_R_top.shape[0] - 1])
+            claw_top_next = np.add(state_offset, self.positions_R_top[self.positions_R_top.shape[0] - 1])
         else:
-            claw_top_next = tuple(self.positions_R_top[r_top_idx - 1])
+            claw_top_next = np.add(state_offset, self.positions_R_top[r_top_idx - 1])
 
         # Find position in the position list for bottom claw
         for idx, pos in enumerate(self.positions_R_bot):
@@ -411,12 +413,12 @@ class SimulatedWorld(World):
                 r_bot_idx = idx
         # Go to the next element and check for overflow
         if r_bot_idx == 0:
-            claw_bot_next = tuple(self.positions_R_bot[self.positions_R_top.shape[0] - 1])
+            claw_bot_next = np.add(state_offset, self.positions_R_bot[self.positions_R_top.shape[0] - 1])
         else:
-            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx - 1])
+            claw_bot_next = np.add(state_offset, self.positions_R_bot[r_bot_idx - 1])
 
         # Move the claws
-        self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
+        self.__move_claws(np.add(state_offset, claw_bot), claw_bot_next, np.add(state_offset, claw_top), claw_top_next)
         # No need to adjust tcp, because it stays the same
 
     #
@@ -427,10 +429,10 @@ class SimulatedWorld(World):
         # Calculate upper left of the current state based on the tool center point position
         state_offset = self.get_current_state_coordinates()
         # Search for the lower and the upper claw
-        rotor_top = rotor_bot = (0, 0)
+        rotor_top = rotor_bot = [0, 0]
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                check_pos = [state_offset[0] + i, state_offset[1] - j]
+                check_pos = [state_offset[0] + i, state_offset[1] + j]
                 if self._flag_is_set(check_pos, self.rotor_bot):
                     rotor_bot = check_pos
                 elif self._flag_is_set(check_pos, self.rotor_top):
@@ -495,9 +497,10 @@ class SimulatedWorld(World):
             # Set offset
             b = claws[0][1]
             # Check if there is a point containing a wire
-            for i in range(0, claws[0][0] - claws[1][0]):
+            for i in range(0, abs(claws[0][0] - claws[1][0])):
                 if self._flag_is_set((i, round(m * i + b)), self.wire):
                     wire_found = True
+                    break
         # If claws are placed above each other, search in a vertical line
         else:
             for i in range(claws[0][1], claws[1][1]):
@@ -593,6 +596,7 @@ class SimulatedWorld(World):
         print("\n")
         self.move_right()
         self.move_right()
+        self.turn_clockwise()
         print(str(self.get_state_by_tcp()) + "\n")
         print("reward : " + str(self.calculate_reward()))
         # print(self.get_state_by_tcp())
