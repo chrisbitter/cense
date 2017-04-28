@@ -26,7 +26,7 @@ def create_wire_from_file(file_path=sys.path[2] + '/Resources/wires/Cense_wire_0
 
     # Reduce the array to the red values
     wire_arr = np.array(img_arr_cp[:, :, 0])
-    # Where red values aren't 0 aka where the wire is put a 1
+    # Where red values aren't 0 aka where the wire is black put a 1
     wire_arr[wire_arr > 0] = 1.0
 
     # Rotate the image array, so it can be accessed naturally with coordinates like self.__world[x,y]

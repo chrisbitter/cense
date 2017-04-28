@@ -353,6 +353,8 @@ class SimulatedWorld(World):
         claw_bot[1] -= state_offset[1]
         claw_top[0] -= state_offset[0]
         claw_top[1] -= state_offset[1]
+        print(claw_bot)
+        print(claw_top)
 
         # Calculate the future positions of the claws
         # Find position in the position list for top claw
@@ -372,9 +374,11 @@ class SimulatedWorld(World):
                 r_bot_idx = idx
         # Go to the next element and check for overflow
         if r_bot_idx == self.positions_R_top.shape[0] - 1:
-            claw_bot_next = tuple(self.positions_R_bot[0])
+            claw_bot_next = [x + y for x, y in zip(state_offset, self.positions_R_bot[0])]
+            print(claw_bot_next)
         else:
-            claw_bot_next = tuple(self.positions_R_bot[r_bot_idx + 1])
+            claw_bot_next = [x + y for x, y in zip(state_offset, self.positions_R_bot[r_bot_idx + 1])]
+            print(claw_bot_next)
 
         # Move the claws
         self.__move_claws(claw_bot, claw_bot_next, claw_top, claw_top_next)
@@ -589,10 +593,10 @@ class SimulatedWorld(World):
         # print(self.get_state_array(init_state_coords))
         # print("\n")
 
-        # Check if get state by tcp works
         print("\n")
         self.move_right()
         self.move_right()
+        self.turn_clockwise()
         print(str(self.get_state_by_tcp()) + "\n")
         print("reward : " + str(self.calculate_reward()))
         # print(self.get_state_by_tcp())
