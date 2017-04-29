@@ -40,7 +40,7 @@ class SimulatedWorld(World):
     # Tested
     #
     def __create_init_state(self):
-        print("Initializing world")
+        # print("Initializing world")
         # Calculate final goal
         for i in range(self.__world.shape[1] - 1):
             if self._flag_is_set((self.__world.shape[0] - 1, i), self.wire):
@@ -72,6 +72,8 @@ class SimulatedWorld(World):
     # Tested
     #
     def _add_flag(self, position, state):
+        if self.is_out_of_world(position):
+            return
         if not self._flag_is_set(position, state):
             self.__world[position[0], position[1]] += state
 
@@ -79,6 +81,8 @@ class SimulatedWorld(World):
     # Removes a flag if it is set
     #
     def _remove_flag(self, position, state):
+        if self.is_out_of_world(position):
+            return
         if self._flag_is_set(position, state):
             self.__world[position[0], position[1]] -= state
 
@@ -87,6 +91,8 @@ class SimulatedWorld(World):
     # Tested
     #
     def _set_flag(self, position, state):
+        if self.is_out_of_world(position):
+            return
         self.__world[position[0], position[1]] = state
 
     #
@@ -174,6 +180,7 @@ class SimulatedWorld(World):
                 if self._flag_is_set(check_pos, self.wire):
                     list_of_wires.append([i, j])
         list_of_wires = np.array(list_of_wires)
+        non_cleaned_list = np.copy(list_of_wires)
 
         # Clean list
         if previous_action == Action.UP:
@@ -185,6 +192,18 @@ class SimulatedWorld(World):
         if previous_action == Action.RIGHT:
             list_of_wires = list_of_wires[list_of_wires[:, 0] >= 2]
 
+        # Pick the potential goal with the highest distance
+        if len(list_of_wires) == 0:
+            print("\n\n")
+            print("wire list empty!")
+            print("previous action: " + str(previous_action.name))
+            print("Positions checked: \n" + str(pos_list))
+            value_list = [[self.__world[position[0]][position[1]], 30] for position in pos_list]
+            print("Corresponding values: \n" + str(value_list))
+            print("Current tcp_pos: " + str(self.tcp_pos))
+            print("State looks like: \n" + str(self.get_state_by_tcp()))
+            list_of_wires = non_cleaned_list
+
         # Calculate distance from original point to each potential goal
         distance_list = []
         for wire in list_of_wires:
@@ -193,16 +212,6 @@ class SimulatedWorld(World):
             dist = x_dist + y_dist
             distance_list.append(dist)
 
-        # Pick the potential goal with the highest distance
-        if len(distance_list) == 0:
-            print("\n\n")
-            print("distance list empty!")
-            print("previous action: " + str(previous_action.name))
-            print("Positions checked: \n" + str(pos_list))
-            value_list = [[self.__world[position[0]][position[1]], 30] for position in pos_list]
-            print("Corresponding values: \n" + str(value_list))
-            print("Current tcp_pos: " + str(self.tcp_pos))
-            print("State looks like: \n" + str(self.get_state_by_tcp()))
         goal_index = np.argmax(distance_list)
         goal_relative = list_of_wires[goal_index]
         goal = (goal_relative[0] + state_offset[0], goal_relative[1] + state_offset[1])
@@ -369,7 +378,7 @@ class SimulatedWorld(World):
     #
     # Moves the tcp to a new location and copies the state into there
     #
-    def move_tcp_and_change_world(self, tcp, state):
+    def move_tcp_and_change_world(self, tcp, state, previous_action):
         # Find current claw positions
         claw_pos = self.find_claw_positions()
         # Remove current goal and claw flags
@@ -378,13 +387,13 @@ class SimulatedWorld(World):
         self._remove_flag(self.current_goal, self.goal)
         # Move tcp
         self.tcp_pos = tcp
+        # Set previous action
+        self.last_directed_action = previous_action
         # Reconstruct state
         state_offset = self.get_current_state_coordinates()
         for i in range(self.__state_size):
             for j in range(self.__state_size):
-                current_state = self.get_state_by_tcp()
                 position = (state_offset[0] + i, state_offset[1] + j)
-                print("Working on: " + str(position))
                 # Copy state
                 self._set_flag(position, state[i][j])
                 # Simultaneously search for goal
@@ -543,7 +552,7 @@ class SimulatedWorld(World):
             return -20
 
         if self.goal_reached():
-            if self.tcp_pos == self.last_goal:
+            if self.current_goal == self.last_goal:
                 return 20
             else:
                 return 10
@@ -585,7 +594,6 @@ class SimulatedWorld(World):
         if self.goal_reached():
             if self.last_directed_action is None:
                 self.last_directed_action = Action.RIGHT
-            print("Goal reached, placing new one")
             # Find new goal
             new_goal = self.find_new_goal(self.last_directed_action)
             # Remove old goal flag

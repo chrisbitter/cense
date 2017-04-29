@@ -1,4 +1,5 @@
 import numpy as np
+import hashlib
 
 
 # Represents a state of the world, a smaller cutout with quadratic shape
@@ -12,7 +13,8 @@ class State:
     # Returns the hashcode of the state
     def hash_code(self):
         self.state_array.flags.writeable = False
-        hash_value = hash(self.state_array.data.tobytes())
+        hash_object = hashlib.sha256(self.state_array.data.tobytes())
+        hash_value = hash_object.hexdigest()
         self.state_array.flags.writeable = True
         return hash_value
 
