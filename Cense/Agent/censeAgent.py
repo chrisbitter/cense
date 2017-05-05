@@ -1,7 +1,8 @@
 import numpy as np
 import sys
+import json
 from World.Simulated.simulatedWorld import SimulatedWorld
-from World.Real.realWorld import RealWorld
+# from World.Real.realWorld import RealWorld
 from Decider.Lookup.lookupDecider import LookupDecider
 
 
@@ -27,7 +28,7 @@ class CenseAgent:
         self.lookup_file = lookup_file
         self.simulated_world = SimulatedWorld(image_path)
         self.decider = LookupDecider(epsilon, gamma, lookup_file)
-        self.real_world = RealWorld()
+        # self.real_world = RealWorld()
 
     #
     # Trains the decider in a number of epochs
@@ -44,6 +45,9 @@ class CenseAgent:
             # Disable random actions
             self.decider.set_epsilon(0)
             # Get stable state
+            stable_state, stable_tcp, stable_action = self.play(verbose=False)
+
+            """
             try:
                 stable_state, stable_tcp, stable_action = self.play(verbose=False)
             except AlreadyTrainedException:
@@ -51,6 +55,7 @@ class CenseAgent:
                 init = True
                 if verbose:
                     print("Got stable state")
+            """
 
             # Couldn't find a stable state, force initialization
             if type(stable_state) is not np.ndarray:
@@ -235,14 +240,15 @@ class CenseAgent:
 if __name__ == '__main__':
 
     # Set values
-    play = True
+    play = False
     iterations = 10
-    epochs = 10
-    random_action_probability = 0.1
-    think_ahead_value = 0.5
-    lookup_table_path = sys.path[2] + '/Resources/lookup_tables/lookup.json'
-    wire_base_path = sys.path[2] + '/Resources/wires/Cense_wire_'
-    wire_path = sys.path[2] + '/Resources/wires/Cense_wire_01.png'
+    epochs = 200
+    random_action_probability = 0.1  # epsilon
+    think_ahead_value = 0.5  # gamma
+    print(sys.path)
+    lookup_table_path = '../../Resources/lookup_tables/lookup.json'
+    wire_base_path = '../../Resources/wires/Cense_wire_'
+    wire_path = '../../Resources/wires/Cense_wire_01.png'
 
     # Initialize Agent
     agent = CenseAgent(wire_path, random_action_probability, think_ahead_value, lookup_table_path)
@@ -270,6 +276,9 @@ if __name__ == '__main__':
                     pass
                 break
             # Start training on the current wire
-            agent.train(epochs, init=False, verbose=False)
+            try:
+                agent.train(epochs, init=False, verbose=True)
+            except AlreadyTrainedException:
+                break
             # Persist lookup table
             agent.decider.persist_lookup_table()
