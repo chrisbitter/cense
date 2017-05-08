@@ -1,9 +1,9 @@
 import numpy as np
 import sys
 import json
-from World.Simulated.simulatedWorld import SimulatedWorld
+from Cense.World.Simulated.simulatedWorld import SimulatedWorld
 # from World.Real.realWorld import RealWorld
-from Decider.Lookup.lookupDecider import LookupDecider
+from Cense.Decider.Lookup.lookupDecider import LookupDecider
 
 
 class AlreadyTrainedException(Exception):

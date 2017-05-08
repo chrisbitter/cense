@@ -3,40 +3,27 @@ import json
 import numpy as np
 from Cense.Decider.action import Action
 import warnings
-
+from keras.models import Sequential
 
 #
-# Implementation of a Decider making decisions based upon a lookup table and an epsilon value
+# Implementation of a Decider making decisions using a Neural Network
 #
-class LookupDecider(Decider):
+class DqnDecider(Decider):
 
-    # Path to the file containing the lookup table
-    __lookup_file_path = ""
-    # Lookup table
-    __lookup = {}
-    # Epsilon value determining the probability of a random action
-    __epsilon = 0
-    # Gamma value determining how much future rewards will be taken into account when calculating new q_values
-    __gamma = 0
+    prediction_network = None
+    target_network = None
 
     #
-    # Initiates a lookup table from a given file
-    # If no path is given, a standard table will be used
-    # Epsilon value determines the probability of a random action
-    # Gamma value determines how much future rewards will be taken into account when calculating new q_values
     #
-    def __init__(self,  epsilon, gamma, lookup_file='NNs/lookup9.json'):
-        # Set path of the lookup table
-        self.__lookup_file_path = lookup_file
-        # Set gamma value
-        self.__gamma = gamma
-        self.set_epsilon(epsilon)
-        # Open lookup table
-        try:
-            with open(lookup_file, 'r') as fp:
-                self.__lookup = json.load(fp)
-        except FileNotFoundError:
-            pass
+    #
+    def __init__(self):
+        self.prediction_network = create_model()
+        self.target_network = create_model()
+
+        target_network
+
+    def create_network(self):
+        model = Sequential()
 
     #
     # Persists the lookup table into a json file.
