@@ -5,6 +5,7 @@ import yaml
 
 import os.path as path
 
+from Cense.Decider.NeuralNetwork.dqnDecider import DqnDecider
 
 from Cense.World.Real.realWorld import RealWorld
 from Resources.PrioritizedExperienceReplay.rank_based import Experience
@@ -22,12 +23,6 @@ class NeuralNetworkAgent(object):
     gamma = 0
     #lookup_file = ""
 
-
-
-
-    current_model_config = None
-    lock_model_config = threading.Lock()
-
     experienceBuffer = None
     lock_buffer = threading.Lock()
 
@@ -42,39 +37,13 @@ class NeuralNetworkAgent(object):
         # use the real world
         self.world = RealWorld()
 
-        self.decider = NeuralNetworkDecider()
+        self.decider = DqnDecider()
 
-        print("\nSelect Mode: (0=Train, 1=Play)")
-
-        print("Debug Mode: Using Train...")
-
-        mode = 0
-        # mode = int(input())
-
-        if mode == 0:
-
-            # TODO: add parameters for experience buffer
-            buffer_conf = {'size': 50,
-                           'learn_start': 10,
-                           'partition_num': 5,
-                           'total_step': 100,
-                           'batch_size': 4}
-
-            self.experienceBuffer = Experience(buffer_conf)
-
-            self.train(1, 1, 1)
-        elif mode == 1:
-            self.play()
-        else:
-            print("Unknown Mode! Shutting down...")
+        self.experienceBuffer = Experience()
 
     def train(self, epochs, init, infinite_training=False):
 
         try:
-            with self.lock_model_config:
-                if self.current_model_config is None:
-                    raise InitializationError
-
             while True:
 
                 trainer = threading.Thread(target=self.trainer)
@@ -90,8 +59,6 @@ class NeuralNetworkAgent(object):
                     break
         except KeyboardInterrupt:
             print("Abort Training")
-        except InitializationError as e:
-            print(e.msg)
         finally:
             # TODO: save everything
             pass
@@ -193,8 +160,6 @@ class NeuralNetworkAgent(object):
 
         except KeyboardInterrupt:
             print("Abort Training")
-        except InitializationError as e:
-            print(e.msg)
         finally:
             # TODO: save everything
             pass
@@ -202,8 +167,4 @@ class NeuralNetworkAgent(object):
 
 if __name__ == '__main__':
     print("Starting from nnAgent")
-
-    config_filename = str(
-        path.dirname(path.realpath(__file__) + '/../../Resources/')) + '\\ur5_configuration_CENSE_test.xml'
-
-    agent = Agent(config_filename)
+    agent = NeuralNetworkAgent()
