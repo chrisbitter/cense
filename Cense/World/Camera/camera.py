@@ -9,12 +9,12 @@ FILENAME = 'capture.png'
 
 class Camera(object):
 
-    init = False
+    __init = False
 
-    @staticmethod
-    def camstream():
+    def camstream(self):
 
-        if not
+        if not self.__init:
+            pass
         pygame.init()
         pygame.camera.init()
         display = pygame.display.set_mode(SIZE, 0)
