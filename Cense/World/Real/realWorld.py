@@ -3,14 +3,16 @@ from Cense.World.Camera.camera import Camera
 import RTDE_Controller_CENSE as rtde
 import math
 import numpy as np
+import logging
 
 
 class RealWorld(World):
-    Z_DECOUPLED = -5
-    Z_COUPLED = 0
+    Z_DISENGAGED = -5
+    Z_ENGAGED = 0
 
-    START_POSITION = [-0.339, 0.387, Z_COUPLED, 0, 0, 0]
-    GOAL_POSITION = [-0.339, 0.387, Z_COUPLED, 0, 0, 0]
+    # todo: Find correct coordinates
+    START_POSE = [-0.339, 0.387, Z_ENGAGED, 0, 0, 0]
+    GOAL_POSE = [-0.339, 0.387, Z_ENGAGED, 0, 0, 0]
 
     MAX_ERROR = .001
     MAX_ERROR_COUPLE = .01
@@ -43,62 +45,37 @@ class RealWorld(World):
     def __init__(self):
         self.camera = Camera()
 
-
-    def move_left(self):
-        current_pos = rtde.current_position()
-        current_pos[0] -= RealWorld.move_constant
-        rtde.move_to_position(current_pos)
-        pass
-
-    def move_right(self):
-        current_pos = rtde.current_position()
-        current_pos[0] += RealWorld.move_constant
-        rtde.move_to_position(current_pos)
-        pass
-
-    def move_up(self):
-        current_pos = rtde.current_position()
-        current_pos[2] -= RealWorld.move_constant
-        rtde.move_to_position(current_pos)
-        pass
-
-    def move_down(self):
-        current_pos = rtde.current_position()
-        current_pos[2] += RealWorld.move_constant
-        rtde.move_to_position(current_pos)
-        pass
-
-    def turn_counter_clockwise(self):
-        current_pos = rtde.current_position()
-        current_pos[4] += RealWorld.pi*RealWorld.turn_constant/180
-        rtde.move_to_position(current_pos)
-        pass
-
-    def turn_clockwise(self):
-        current_pos = rtde.current_position()
-        current_pos[4] -= RealWorld.pi*RealWorld.turn_constant/180
-        rtde.move_to_position(current_pos)
-        pass
-
     def execute(self, action):
         # only move when state is not terminal
         if not self.in_terminal_state():
+
+            current_pos = rtde.current_position()
 
             if len(action) > 1:
                 action = np.argmax(action)
 
             if action == 0:
-                self.move_left()
+                # Left
+                current_pos[0] -= RealWorld.move_constant
             elif action == 1:
-                self.move_right()
+                # Right
+                current_pos[0] += RealWorld.move_constant
             elif action == 2:
-                self.move_up()
+                # Up
+                current_pos[2] -= RealWorld.move_constant
             elif action == 3:
-                self.move_down()
+                # Down
+                current_pos[2] += RealWorld.move_constant
             elif action == 4:
-                self.turn_clockwise()
+                # Clockwise
+                current_pos[4] -= RealWorld.pi * RealWorld.turn_constant / 180
             elif action == 5:
-                self.turn_counter_clockwise()
+                # Counter-Clockwise
+                current_pos[4] += RealWorld.pi * RealWorld.turn_constant / 180
+            else:
+                logging.error("Unknown action: %i" % action)
+
+            rtde.move_to_position(current_pos)
 
             if self.is_touching_wire():
                 reward = self.PUNISHMENT_WIRE
@@ -149,49 +126,76 @@ class RealWorld(World):
     def invert_game(self):
         self.logging.debug("invert_game")
 
-        rtde.disengage()
+        self.disengage()
         rtde.rotate_180()
         self.engage()
 
         # switch start and goal
-        temp = self.START_POSITION
-        self.START_POSITION = self.GOAL_POSITION
-        self.GOAL_POSITION = temp
+        temp = self.START_POSE
+        self.START_POSE = self.GOAL_POSE
+        self.GOAL_POSE = temp
 
         # reset checkpoints
-        self.__checkpoints = [self.START_POSITION]
-
+        self.__checkpoints = [self.START_POSE]
 
     def reset(self):
-        rtde.go_start_via_path()
-        pass
+        logging.debug("RealWorld reset")
+        pose = self.START_POSE
+        pose[2] = self.Z_DISENGAGED
+        rtde.move_to_position(pose)
+        
+    def engage(self):
+        logging.debug("RealWorld engage")
+        pose = rtde.current_position()
+        pose[2] = self.Z_ENGAGED
+        rtde.move_to_position(pose)
 
-    def take_picture(self):
-        rtde.disengage()
-        rtde.go_camera()
-        rtde.take_picture()
-        rtde.go_start_disengaged()
-        rtde.engage()
-        pass
+    def disengage(self):
+        logging.debug("RealWorld disengage")
+        pose = rtde.current_position()
+        pose[2] = self.Z_DISENGAGED
+        rtde.move_to_position(pose)
+
+    def test_movement(self):
+        input("Test Movement")
+
+        input("Test reset\nPRESS ENTER")
+
+        self.reset()
+
+        for i in range(6):
+            action = np.zeros(1, 6)
+            input("Test action %s\nPRESS ENTER" % str(action))
+            action[i] = 1
+            self.execute(action)
+
+        input("Test engage\nPRESS ENTER")
+        self.engage()
+
+        input("Test disengage\nPRESS ENTER")
+        self.disengage()
+
+    def test_observation(self):
+        input("Test Observation")
+
+        input("Test observe\nPRESS ENTER")
+        state, terminal = self.observe()
+
+        print("state\n",state,"\n")
+        print("terminal: ", terminal)
+
+        input("Test is_touching_wire\nPRESS ENTER")
+        print(self.is_touching_wire())
 
 
-RealWorld = RealWorld()
-print('CH1')
-RealWorld.reset()
+if __name__ == "__main__":
 
+    logging.getLogger().setLevel(logging.DEBUG)
 
-while True:
-    # print('CH2')
-    # RealWorld.move_up()
-    # print('CH3')
-    # RealWorld.move_down()
-    # print('CH4')
-    # RealWorld.move_right()
-    # print('CH5')
-    # RealWorld.move_left()
-    # print('CH6')
-    # RealWorld.turn_clockwise()
-    # print('CH7')
-    # RealWorld.turn_counter_clockwise()
-    # print('CH8')
-    RealWorld.take_picture()
+    logging.info("Started RealWorld as main")
+    world = RealWorld()
+
+    world.test_movement()
+    world.test_observation()
+
+    print("Done")

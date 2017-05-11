@@ -59,6 +59,38 @@ def model_dueling(input_dim, output_dim):
 
     return model
 
+def model_ac(input_dim, output_dim):
+    # Common Layers
+    input_layer = Input(shape=input_dim)
+    common_layer = Conv2D(30, (5, 5), input_shape=input_dim, activation="relu")(input_layer)
+    common_layer = MaxPooling2D(pool_size=(2, 2))(common_layer)
+    common_layer = Conv2D(15, (3, 3), activation="relu")(common_layer)
+    common_layer = MaxPooling2D(pool_size=(2, 2))(common_layer)
+    common_layer = Flatten()(common_layer)
+
+    pol_layer = Dropout(0.2)(common_layer)
+    pol_layer = Dense(128, activation="relu")(pol_layer)
+    pol_layer = Dense(50, activation="relu")(pol_layer)
+    pol_layer = Dense(output_dim, activation="tanh")(pol_layer)
+
+    val_layer = Dropout(0.2)(common_layer)
+    val_layer = Dense(128, activation="relu")(val_layer)
+    val_layer = Dense(50, activation="relu")(val_layer)
+    val_layer = Dense(1, activation="linear")(val_layer)
+    val_layer = RepeatVector(output_dim)(val_layer)
+    val_layer = Flatten()(val_layer)
+    # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
+    merge_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - mean(x[0], keepdims=True),
+                        output_shape=lambda x: x[0])
+    merge_layer = Activation(activation="softmax")(merge_layer)
+
+    model = Model(inputs=[input_layer], outputs=[merge_layer])
+
+    model.compile(loss='mse',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+
+    return model
 
 if __name__ == "__main__":
     model = model_dueling((28, 28, 1), 6)

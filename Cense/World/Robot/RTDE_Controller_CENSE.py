@@ -133,13 +133,6 @@ def list_to_setp(setp, list):
         setp.__dict__["input_double_register_%i" % i] = list[i]
     return setp
 
-
-def rotate_180():
-    current_pose = rtde.current_position()
-    target_pose = current_pose + [0, 0, 0, 0, 0, math.pi]  # rotate 180°
-    rtde.move_to_position(target_pose)
-
-
 # move_to_position changes the position and orientation of the TCP of the robot relative to the defined Cartesian plane
 def move_to_position(new_pos):
     # Checks for the state of the connection
