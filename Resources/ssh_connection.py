@@ -1,21 +1,29 @@
-from pexpect import pxssh
-import getpass
+import paramiko
+import json
 
+with open('credentials.json') as json_data:
+    config = json.load(json_data)
+
+config = config["gpu"]
 
 if __name__ == '__main__':
-    try:
-        s = pxssh.pxssh()
-        hostname = 'nalaland.ddns.net'
-        username = 'pi'
-        password = 'Y#Rasany4$PiK'
-        s.login(hostname, username, password)
-        s.sendline('cd /home/pi/Thesis/data')  # run a command
-        s.prompt()  # match the prompt
-        print(s.before)  # print everything before the prompt.
-        s.sendline('ls -l')
-        s.prompt()
-        print(s.before)
-        s.logout()
-    except pxssh.ExceptionPxssh as e:
-        print("pxssh failed on login.")
-        print(str(e))
+
+    host = config["host"]
+    port = config["port"]
+    username = config["user"]
+    password = config["password"]
+
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(
+        paramiko.AutoAddPolicy())
+
+    ssh.connect(host, port, username, password)
+
+    folder_on_gpu = config["folder_on_gpu"]
+
+    config_path = "abc"
+    new_data_path = "xyz"
+
+    command = "python " + folder_on_gpu + "train_from_config.py " + config_path + " " + new_data_path
+    stdin, stdout, stderr = ssh.exec_command(command)
+    print(stdout.readlines())

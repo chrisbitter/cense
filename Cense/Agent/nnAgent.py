@@ -9,19 +9,20 @@ from Cense.Decider.NeuralNetwork.dqnDecider import DqnDecider
 
 from Cense.World.Real.realWorld import RealWorld
 from Resources.PrioritizedExperienceReplay.rank_based import Experience
+from Cense.World.Camera.camera import Camera
 
 from keras.models import Model
 
 
 class NeuralNetworkAgent(object):
-    #simulated_world = None
+    # simulated_world = None
     real_world = None
     decider = None
-    #image_path = ""
+    # image_path = ""
     original_epsilon = 0
     epsilon = 0
     gamma = 0
-    #lookup_file = ""
+    # lookup_file = ""
 
     experienceBuffer = None
     lock_buffer = threading.Lock()
@@ -108,37 +109,25 @@ class NeuralNetworkAgent(object):
             # reset timeout
             current_timeout = 0
 
-    def collector(self, episodes, exploration_probability):
+    def collect_experience(self, episodes, exploration_probability, decider):
 
-        self.working_collectors += 1
+            self.world.init_nonterminal_state()
 
-        try:
-            for episode in range(episodes):
-                # get current model
-                with self.lock_model_config:
-                    model_config = self.current_model_config
+            # observe initial state (discard reward)
+            state, _, terminal = self.world.observe(None)
 
-                model = Model.from_config(model_config)
+            while not terminal:
+                action = decider.decide(state)
 
-                self.world.init_nonterminal_state()
+                successor_state, reward, terminal = self.world.execute(action)
 
-                # observe initial state (discard reward)
-                state, _, terminal = self.world.observe(None)
+                experience = (state, action, reward, successor_state)
 
-                while not terminal:
-                    action = model.predict(state)
+                # update buffer with new experience
+                with self.lock_buffer:
+                    self.experienceBuffer.store(experience)
 
-                    successor_state, reward, terminal = self.world.execute(action)
-
-                    experience = (state, action, reward, successor_state)
-
-                    # update buffer with new experience
-                    with self.lock_buffer:
-                        self.experienceBuffer.store(experience)
-
-                    state = successor_state
-        finally:
-            self.working_collectors -= 1
+                state = successor_state
         return
 
     def play(self, decider, verbose):
