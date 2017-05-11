@@ -19,4 +19,5 @@ This project uses Machine Learning to learn the Loop-Wire Game
 - copy Resources/credentials_template.json file
 - rename to credentials.json
 - enter valid credentials
-- **YOU OBVIOUSLY MUST NOT ADD credentials.json to Git!**
+- **YOU OBVIOUSLY MUST NOT DISTRIBUTE credentials.json to Git!**
+  - Note: credentials.json is in .gitignore
