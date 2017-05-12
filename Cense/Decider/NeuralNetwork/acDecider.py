@@ -12,7 +12,7 @@ from Resources.NeuralNetworks.nn import model_ac as model
 #
 # Implementation of a Decider making decisions using a Neural Network
 #
-class NeuralNetworkDecider(Decider):
+class AcDecider(Decider):
 
     __neural_network = None
 

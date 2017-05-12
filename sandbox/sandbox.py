@@ -14,13 +14,13 @@ def save_array():
         state = np.random.rand(50, 50)
         action = np.random.rand(6, 1)
         reward = np.random.uniform(-10, 10)
-        succ_state = np.random.rand(50, 50)
+        suc_state = np.random.rand(50, 50)
         terminal = np.random.randint(2)
 
         states.append(state)
         actions.append(action)
         rewards.append(reward)
-        suc_states.append(succ_state)
+        suc_states.append(suc_state)
         terminals.append(terminal)
 
     f = h5py.File('dummy_data.h5', 'w')

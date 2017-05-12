@@ -13,9 +13,10 @@ from Resources.PrioritizedExperienceReplay.rank_based import Experience
 from Cense.World.Camera.camera import Camera
 
 from keras.models import Model
+import numpy as np
 
 
-class NeuralNetworkAgent(object):
+class DeepQNetworkAgent(object):
     # simulated_world = None
     real_world = None
     decider = None
@@ -44,27 +45,32 @@ class NeuralNetworkAgent(object):
 
 
 
-    def train(self, epochs, infinite_training=False):
+    def train(self, episodes, exploration_probability):
 
-        try:
-            while True:
+        # get current model
+        with self.lock_model:
+            model_config = self.current_model_config
 
-                trainer = threading.Thread(target=self.trainer)
-                collector = threading.Thread(target=self.collector(epochs))
+        model = Model.from_config(model_config)
+        model_target = Model.from_config(model_config)
 
-                collector.start()
-                trainer.start()
+        for episode in range(episodes):
 
-                collector.join()
-                trainer.join()
+            self.world.init_nonterminal_state()
 
-                if not infinite_training:
-                    break
-        except KeyboardInterrupt:
-            print("Abort Training")
-        finally:
-            # TODO: save everything
-            pass
+            state, terminal = self.world.observe()
+
+            while not terminal:
+                if np.random.random() < exploration_probability:
+                    action = np.random.randint(6)
+                else:
+                    action = np.argmax(model.predict(state))
+
+                suc_state, reward, terminal = self.world.execute(action)
+
+
+
+
 
     def trainer(self, epochs=1, minibatch_size=5, copy_network_ratio=.8):
 
