@@ -1,12 +1,9 @@
-from Cense.Decider.decider import Decider
-import json
-import numpy as np
-from Cense.Decider.action import Action
-import warnings
 import numpy as np
 from keras.models import load_model
 
-from Resources.NeuralNetworks.nn import model_ac as model
+from Cense.Decider.action import Action
+from Cense.Decider.decider import Decider
+from Cense.NeuralNetworkFactory.nnFactory import model_ac as model
 
 
 #

@@ -1,25 +1,25 @@
 import threading
-import time
+import logging
+from Cense.Trainer.gpu import GPU_Trainer
 
-import yaml
+from Cense.World.dummy_world import DummyWorld as World
+# from Resources.PrioritizedExperienceReplay.rank_based import Experience
+from Cense.World.dummy_world import TerminalStateError
 
-import os.path as path
+import Cense.NeuralNetworkFactory.nnFactory as factory
 
-from Cense.Decider.NeuralNetwork.dqnDecider import DqnDecider
-from Cense.Decider.NeuralNetwork.acDecider import AcDecider as Decider
-
-from Cense.World.Real.realWorld import RealWorld as World
-from Resources.PrioritizedExperienceReplay.rank_based import Experience
-from Cense.World.Camera.camera import Camera
-
-from keras.models import Model
 import numpy as np
+import os
+from keras.models import model_from_json
 
+#silence tf compile warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
 class DeepQNetworkAgent(object):
     # simulated_world = None
     real_world = None
-    decider = None
+    model_file = "../../Resources/nn-data/model.json"
+    weights_file = "../../Resources/nn-data/weights.h5"
     # image_path = ""
     original_epsilon = 0
     epsilon = 0
@@ -31,139 +31,108 @@ class DeepQNetworkAgent(object):
 
     working_collectors = 0
 
-    def __init__(self, learning_rate):
+    def __init__(self, use_old_model=False):
 
-        self.learning_rate = learning_rate
+        project_root_folder = os.path.join(os.getcwd(), "..", "..", "")
 
         # use the real world
         self.world = World()
-        self.decider = Decider()
 
-        self.experienceBuffer = Experience()
+        # if there's already a model, use it. Else create new model
+        if use_old_model and os.path.isfile(self.model_file) and os.path.isfile(self.weights_file):
+            with open(self.model_file) as file:
+                model_config = file.readline()
+                self.model = model_from_json(model_config)
 
-        self.train(10)
+            self.model.load_weights(self.weights_file)
 
+        else:
+            self.model = factory.model_dueling(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
+            with open(self.model_file, 'w') as file:
+                file.write(self.model.to_json())
 
+            self.model.save_weights(self.weights_file)
 
-    def train(self, episodes, exploration_probability):
+        self.trainer = GPU_Trainer(project_root_folder)
+        self.trainer.send_model_to_gpu()
 
-        # get current model
-        with self.lock_model:
-            model_config = self.current_model_config
+    def train(self, exploration_probability=.1, runs_before_update=10):
+        print("train")
 
-        model = Model.from_config(model_config)
-        model_target = Model.from_config(model_config)
+        states = []
+        actions = []
+        rewards = []
+        suc_states = []
+        terminals = []
 
-        for episode in range(episodes):
-
-            self.world.init_nonterminal_state()
-
-            state, terminal = self.world.observe()
-
-            while not terminal:
-                if np.random.random() < exploration_probability:
-                    action = np.random.randint(6)
-                else:
-                    action = np.argmax(model.predict(state))
-
-                suc_state, reward, terminal = self.world.execute(action)
-
-
-
-
-
-    def trainer(self, epochs=1, minibatch_size=5, copy_network_ratio=.8):
-
-        timeout = int(5)
-        current_timeout = 0
-
-        # get current model
-        with self.lock_model:
-            model_config = self.current_model_config
-
-        model = Model.from_config(model_config)
-        model_target = Model.from_config(model_config)
-
-        while True:
-
-            with self.lock_buffer:
-                samples, importance_sampling_weight, element_id = self.experienceBuffer.sample(51)
-
-            if samples is not None & importance_sampling_weight is not None & element_id is not None:
-                # sampling was successful is good
-
-                # todo: learn
-                # todo: update model_parameters
-
-                # if terminal:
-                #   target = reward
-                # else:
-                #   targets = rewards + discount_factor * model_target.value(successor_state) - model_target(state)
-
-                # calculate targets: y = r + discount * Q_copy(
-                y = sample[2] + model_copy
-
-                pass
-            else:
-                # buffer didn't sample. Wait a certain timeout and try sampling again
-                current_timeout = timeout
-
-            # if there is no more collectors making experiences, stop refining the model
-            if self.working_collectors <= 0:
-                break
-
-            # sleep for 5 seconds before checking Buffer again
-            time.sleep(current_timeout)
-            # reset timeout
-            current_timeout = 0
-
-    def work(self, max_episode_length,gamma):
-
-    def collect_experience(self, episodes, exploration_probability, decider):
-
-            self.world.init_nonterminal_state()
-
-            # observe initial state (discard reward)
-            state, _, terminal = self.world.observe(None)
-
-            while not terminal:
-                action = decider.decide(state)
-
-                successor_state, reward, terminal = self.world.execute(action)
-
-                experience = (state, action, reward, successor_state)
-
-                # update buffer with new experience
-                with self.lock_buffer:
-                    self.experienceBuffer.store(experience)
-
-                state = successor_state
-        return
-
-    def play(self, decider, verbose):
-        with self.lock_model_config:
-            if self.current_model_config is None:
-                raise ValueError("No model configuration available")
-            else:
-                model = Model.from_config(self.current_model_config)
+        # statistics
+        runs = []
 
         try:
-            self.world.init_nonterminal_state()
+            while True:
 
-            state = self.world.observe()
+                # start new run
 
-            while not self.world.in_terminal_state():
-                action = model(state)
+                # statistics
+                run_reward = 0
+                run_steps = 0
 
-                state, reward = self.world.execute(action)
+                self.world.init_nonterminal_state()
+
+                state, terminal = self.world.observe()
+
+                while not terminal:
+                    # evaluate policy and value
+
+                    q_values = self.model.predict(np.expand_dims(state, axis=0))
+
+                    # explore with exploration_probability, else exploit
+                    if np.random.random() < exploration_probability:
+                        action = np.random.randint(self.world.ACTIONS)
+                    else:
+                        action = np.argmax(q_values)
+
+                    try:
+                        suc_state, reward, terminal = self.world.execute(action)
+                    except TerminalStateError as e:
+                        print(e)
+                        break
+
+                    states.append(state)
+                    actions.append(action)
+                    rewards.append(reward)
+                    suc_states.append(suc_state)
+                    terminals.append(terminal)
+
+                    # collect stats
+                    run_steps += 1
+                    run_reward += reward
+
+                if run_steps:
+                    runs.append([run_steps, run_reward])
+
+                # train nn after collecting some experience
+                if len(runs) % runs_before_update == 0:
+                    logging.debug("update net")
+
+                    self.trainer.send_experience_to_gpu(states, actions, rewards, suc_states, terminals)
+                    self.trainer.train_on_gpu()
+
+                    self.trainer.fetch_model_weights_from_gpu()
+                    self.model.load_weights(self.weights_file)
+
+                    states = []
+                    actions = []
+                    rewards = []
+                    suc_states = []
+                    terminals = []
 
         except KeyboardInterrupt:
             print("Abort Training")
-        finally:
-            # TODO: save everything
-            pass
 
 
 if __name__ == '__main__':
-    print("Starting from nnAgent")
-    agent = NeuralNetworkAgent()
+    print("Starting from dqnAgent")
+    agent = DeepQNetworkAgent()
+
+    agent.train(10)

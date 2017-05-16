@@ -1,4 +1,4 @@
-from Cense.World.world import World
+# from Cense.World.world import World
 from Cense.World.Camera.camera import Camera
 import RTDE_Controller_CENSE as rtde
 import math
@@ -6,7 +6,12 @@ import numpy as np
 import logging
 
 
-class RealWorld(World):
+class TerminalStateError(Exception):
+    def __init__(self, *args):
+        super().__init__(self, *args)
+
+
+class RealWorld(object):
     Z_DISENGAGED = -5
     Z_ENGAGED = 0
 
@@ -32,14 +37,13 @@ class RealWorld(World):
     REWARD_GENERIC = -.01
 
     STATE_DIMENSIONS = (50, 50)
+    ACTIONS = 6
 
     __checkpoints = []
     camera = None
-    _state_terminal = True
 
-    pi = math.pi
-    move_constant = .01
-    turn_constant = 45
+    translation_constant = .01
+    rotation_constant = 45
     camera = None
 
     def __init__(self):
@@ -56,22 +60,22 @@ class RealWorld(World):
 
             if action == 0:
                 # Left
-                current_pos[0] -= RealWorld.move_constant
+                current_pos[0] -= self.translation_constant
             elif action == 1:
                 # Right
-                current_pos[0] += RealWorld.move_constant
+                current_pos[0] += self.translation_constant
             elif action == 2:
                 # Up
-                current_pos[2] -= RealWorld.move_constant
+                current_pos[2] -= self.translation_constant
             elif action == 3:
                 # Down
-                current_pos[2] += RealWorld.move_constant
+                current_pos[2] += self.translation_constant
             elif action == 4:
                 # Clockwise
-                current_pos[4] -= RealWorld.pi * RealWorld.turn_constant / 180
+                current_pos[4] -= self.rotation_constant * math.pi / 180
             elif action == 5:
                 # Counter-Clockwise
-                current_pos[4] += RealWorld.pi * RealWorld.turn_constant / 180
+                current_pos[4] += RealWorld.rotation_constant * math.pi / 180
             else:
                 logging.error("Unknown action: %i" % action)
 
@@ -96,7 +100,7 @@ class RealWorld(World):
             else:
                 reward = self.REWARD_GENERIC
         else:
-            reward = 0
+            raise TerminalStateError("Cannot perform actions in terminal states!")
 
         state, terminal = self.observe()
 
@@ -106,8 +110,8 @@ class RealWorld(World):
         return self.camera.capture_image(), self.in_terminal_state()
 
     def in_terminal_state(self):
-            return self.is_touching_wire() | self.is_in_dead_zone() | \
-                    self.is_at_goal()
+        return self.is_touching_wire() | self.is_in_dead_zone() | \
+               self.is_at_goal()
 
     def is_touching_wire(self):
         # todo: get wire/loop circuit signal
@@ -143,7 +147,7 @@ class RealWorld(World):
         pose = self.START_POSE
         pose[2] = self.Z_DISENGAGED
         rtde.move_to_position(pose)
-        
+
     def engage(self):
         logging.debug("RealWorld engage")
         pose = rtde.current_position()
@@ -181,7 +185,7 @@ class RealWorld(World):
         input("Test observe\nPRESS ENTER")
         state, terminal = self.observe()
 
-        print("state\n",state,"\n")
+        print("state\n", state, "\n")
         print("terminal: ", terminal)
 
         input("Test is_touching_wire\nPRESS ENTER")
@@ -189,7 +193,6 @@ class RealWorld(World):
 
 
 if __name__ == "__main__":
-
     logging.getLogger().setLevel(logging.DEBUG)
 
     logging.info("Started RealWorld as main")

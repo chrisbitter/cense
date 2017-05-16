@@ -1,16 +1,18 @@
 import numpy as np
 import h5py
+import Cense.NeuralNetworkFactory.nnFactory as factory
+
 
 def save_array():
-
     states = []
-    actions= []
+    actions = []
     rewards = []
     suc_states = []
     terminals = []
 
-    for i in range(10):
+    experience = []
 
+    for i in range(50):
         state = np.random.rand(50, 50)
         action = np.random.rand(6, 1)
         reward = np.random.uniform(-10, 10)
@@ -24,6 +26,7 @@ def save_array():
         terminals.append(terminal)
 
     f = h5py.File('dummy_data.h5', 'w')
+
     f.create_dataset('states', data=states)
     f.create_dataset('actions', data=actions)
     f.create_dataset('rewards', data=rewards)
@@ -34,17 +37,25 @@ def save_array():
 
 def load_array():
     f = h5py.File('dummy_data.h5', 'r')
+
     data = f['states'][:]
-    print(data[0][0])
-    data = f['rewards'][:]
-    print(data[0])
-    data = f['terminals'][:]
-    print(data[0])
+    print(data.shape)
 
     f.close()
 
+
+def save_model():
+    model = factory.model_simple_conv((50, 50), 6)
+
+    with open('model.json', 'w') as file:
+        file.write(model.to_json())
+
+    model.save_weights("weights.h5")
+
+
 if __name__ == "__main__":
+    # save_array()
 
-    save_array()
+    # load_array()
 
-    load_array()
+    save_model()

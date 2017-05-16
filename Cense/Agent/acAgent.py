@@ -1,14 +1,13 @@
-import threading
 import time
 
 import yaml
 
 import os.path as path
 
-from Cense.Decider.NeuralNetwork.dqnDecider import DqnDecider
-from Cense.Decider.NeuralNetwork.acDecider import AcDecider as Decider
+from Cense.NeuralNetworkFactory.nnFactory import model_ac as model
 
 from Cense.World.Real.realWorld import RealWorld as World
+from Cense.World.Real.realWorld import TerminalStateError
 from Resources.PrioritizedExperienceReplay.rank_based import Experience
 from Cense.World.Camera.camera import Camera
 
@@ -33,16 +32,16 @@ class AC_Agent(object):
         # use the real world
         self.world = World()
 
-        self.experienceBuffer = Experience()
+        #self.experienceBuffer = Experience()
 
-        # todo init model from gpu
-        self.model = None
+        # todo init model and send to gpu
+        self.model = model(self.world.get_state_dimensions(), self.world.get_action_dimensions())
 
         self.trainer = Trainer()
 
         self.train(10)
 
-    def train(self, episodes, update_after_episode="True"):
+    def train(self, episodes, update_after_episode="False"):
 
         episode_states = []
         episode_actions = []
@@ -64,12 +63,16 @@ class AC_Agent(object):
                 episode_steps += 1
 
                 # evaluate policy and value
-                action_distribution, value = ac_network.predict(state)
+                action_distribution, value = self.model.predict(state)
 
                 # get action from distribution
                 action = np.random.choice(range(6), action_distribution)
 
-                suc_state, reward, terminal = self.world.execute(action)
+                try:
+                    suc_state, reward, terminal = self.world.execute(action)
+                except TerminalStateError as e:
+                    print(e.message)
+                    break
 
                 episode_reward += reward
 
@@ -81,6 +84,7 @@ class AC_Agent(object):
 
             # update after last episode and also if network should be updated after every episode
             if update_after_episode | episode == episodes - 1:
+
                 self.trainer.upload_to_gpu(episode_states, episode_actions, episode_rewards, episode_suc_states,
                                            episode_terminals)
                 self.trainer.train_on_gpu()
@@ -96,5 +100,5 @@ class AC_Agent(object):
 
 
 if __name__ == '__main__':
-    print("Starting from nnAgent")
-    agent = NeuralNetworkAgent()
+    print("Starting from acAgent")
+    agent = AC_Agent()

@@ -3,6 +3,7 @@ import h5py
 # paramiko.util.log_to_file('/tmp/paramiko.log')
 import json
 import os
+import logging
 
 class GPU_Trainer(object):
 
@@ -20,10 +21,10 @@ class GPU_Trainer(object):
     model_weights_remote = None
     script_remote = None
 
-    def __init__(self):
+    def __init__(self, project_root_folder):
         config_file = os.path.join(os.path.dirname(__file__), '..', 'Resources', 'my_file')
 
-        with open('credentials.json') as json_data:
+        with open(project_root_folder + 'Resources/credentials.json') as json_data:
             config = json.load(json_data)
 
         config = config["gpu"]
@@ -35,18 +36,31 @@ class GPU_Trainer(object):
         self.username = config["user"]
         self.password = config["password"]
 
-        self.new_data_local = config["new_data_origin"]
-        self.new_data_remote = config["new_data_destination"]
+        self.new_data_local = config["local_data_root"] + config["new_data_local"]
+        self.model_config_local = config["local_data_root"] + config["model_config_local"]
+        self.model_weights_local = config["local_data_root"] + config["model_weights_local"]
 
-        self.model_config_local = config["model_config_local"]
-        self.model_config_remote = config["model_config_remote"]
+        self.new_data_remote = config["remote_data_root"] + config["new_data_remote"]
+        self.model_config_remote = config["remote_data_root"] + config["model_config_remote"]
+        self.model_weights_remote = config["remote_data_root"] + config["model_weights_remote"]
 
-        self.model_weights_local = config["model_local"]
-        self.model_weights_remote = config["model_remote"]
-
-        self.script_remote = config["script_remote"]
+        self.script_remote = config["remote_data_root"] + config["script_remote"]
 
         #todo test if configs are correct -> connect to gpu etc.
+
+    def send_model_to_gpu(self):
+        # init sftp
+        transport = paramiko.Transport((self.host, self.port))
+        transport.connect(username=self.username, password=self.password)
+        sftp = paramiko.SFTPClient.from_transport(transport)
+
+        # Upload Model & Weights
+        sftp.put(self.model_config_local, self.model_config_remote)
+        sftp.put(self.model_weights_local, self.model_weights_remote)
+
+        # Close
+        sftp.close()
+        transport.close()
 
     def send_experience_to_gpu(self, states, actions, rewards, suc_states, terminals):
 
@@ -65,6 +79,9 @@ class GPU_Trainer(object):
         sftp = paramiko.SFTPClient.from_transport(transport)
 
         # Upload Experience
+        logging.debug("local data", self.new_data_local)
+        logging.debug("remote data", self.new_data_remote)
+
         sftp.put(self.new_data_local, self.new_data_remote)
 
         # Close
@@ -97,7 +114,7 @@ class GPU_Trainer(object):
     def fetch_model_weights_from_gpu(self):
         if self.host is None or self.port is None or self.username is None or self.password is None:
             print("Credentials missing!")
-            return None
+            return
 
         # init sftp
         transport = paramiko.Transport((self.host, self.port))
@@ -105,15 +122,16 @@ class GPU_Trainer(object):
         sftp = paramiko.SFTPClient.from_transport(transport)
 
         # Download Model
+        logging.debug("Weights remote: ", self.model_weights_remote)
+        logging.debug("Weights local: ", self.model_weights_local)
         sftp.get(self.model_weights_remote, self.model_weights_local)
 
         # Close
         sftp.close()
         transport.close()
 
-        return self.model_weights_local
-
     def train_on_gpu(self):
+        print("train on gpu")
         if self.script_remote is None:
             print("script_remote missing!")
             return None
@@ -124,12 +142,16 @@ class GPU_Trainer(object):
 
         ssh.connect(self.host, self.port, self.username, self.password)
 
+
         command = "python3 " + self.script_remote
         stdin, stdout, stderr = ssh.exec_command(command)
-        print(stdout.readlines())
+
+        exit_status = stdout.channel.recv_exit_status()
+
+        if exit_status == 0:
+            print("Training on gpu done")
+        else:
+            print("Error: ", exit_status)
+            [print(err) for err in stderr.readlines()]
 
         ssh.close()
-
-    def init_gpu(self, model):
-        #todo init model and weights on gpu
-        pass

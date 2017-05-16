@@ -1,11 +1,8 @@
-from Cense.Decider.decider import Decider
-import json
 import numpy as np
-from Cense.Decider.action import Action
-import warnings
-from keras.models import Model
 
-from Resources.NeuralNetworks.nn import baseline_model as model
+from Cense.Decider.decider import Decider
+from Cense.NeuralNetworkFactory.nnFactory import baseline_model as model
+
 
 #
 # Implementation of a Decider making decisions using a Neural Network
