@@ -1,8 +1,8 @@
 from keras.models import Sequential, Model
-from keras.layers import Input, Dense, Reshape, Conv2D, MaxPooling2D, Dropout, Flatten, RepeatVector, merge, Activation, Lambda
+from keras.layers import Input, Dense, Concatenate, Reshape, Conv2D, MaxPooling2D, Dropout, Flatten, RepeatVector, merge, Activation, Lambda
 from keras.layers.merge import Average, Add
-from keras.backend import mean
-
+import keras.backend as K
+from tensorflow import reduce_mean
 import numpy as np
 
 
@@ -26,7 +26,7 @@ def model_simple_conv(input_shape, output_dim):
 
     return model
 
-
+# v1
 def model_dueling(input_shape, output_dim):
     # Common Layers
     input_layer = Input(shape=input_shape)
@@ -42,8 +42,6 @@ def model_dueling(input_shape, output_dim):
     adv_layer = Dense(50, activation="relu")(adv_layer)
     adv_layer = Dense(output_dim, activation="tanh")(adv_layer)
 
-    #adv_mean =
-
     #val_layer = Dropout(0.2)(common_layer)
     val_layer = Dense(128, activation="relu")(common_layer)
     val_layer = Dense(50, activation="relu")(val_layer)
@@ -51,12 +49,10 @@ def model_dueling(input_shape, output_dim):
     val_layer = RepeatVector(output_dim)(val_layer)
     val_layer = Flatten()(val_layer)
     # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
+    #q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
 
-    q_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - mean(x[0], keepdims=True),
-                    output_shape=lambda x: x[0])
-
-    #q_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - mean(x[0], keepdims=True),
-    #                    output_shape=lambda x: x[0])
+    q_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
+                        output_shape=lambda x: x[0])
     #q_layer = Activation(activation="tanh")(q_layer)
 
     model = Model(inputs=[input_layer], outputs=[q_layer])
@@ -66,7 +62,6 @@ def model_dueling(input_shape, output_dim):
                   metrics=['accuracy'])
 
     return model
-
 
 def model_ac(input_shape, output_dim):
     # Common Layers
@@ -89,7 +84,7 @@ def model_ac(input_shape, output_dim):
     val_layer = RepeatVector(output_dim)(val_layer)
     val_layer = Flatten()(val_layer)
     # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
-    merge_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - mean(x[0], keepdims=True),
+    merge_layer = merge(inputs=[pol_layer, val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
                         output_shape=lambda x: x[0])
     merge_layer = Activation(activation="softmax")(merge_layer)
 

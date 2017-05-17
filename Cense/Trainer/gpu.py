@@ -55,7 +55,8 @@ class GPU_Trainer(object):
         sftp = paramiko.SFTPClient.from_transport(transport)
 
         # Upload Model & Weights
-        sftp.put(self.model_config_local, self.model_config_remote)
+        # todo: check if keras model save for lambda layers has been fixed. Until then, hardcode model on gpu!
+        #sftp.put(self.model_config_local, self.model_config_remote)
         sftp.put(self.model_weights_local, self.model_weights_remote)
 
         # Close

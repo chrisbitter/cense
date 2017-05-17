@@ -43,6 +43,7 @@ class DummyWorld(object):
     camera = None
 
     debug_enter_nonterminal = False
+    terminal_probability = .6
 
     translation_constant = .01
     rotation_constant = 45
@@ -111,8 +112,11 @@ class DummyWorld(object):
             self.debug_nonterminal = False
             return False
         else:
-            return self.is_touching_wire() | self.is_in_dead_zone() | \
-                   self.is_at_goal()
+            if np.random.random() < self.terminal_probability:
+                self.terminal_probability = max(.05, self.terminal_probability * .9)
+                return True
+            else:
+                return False
 
     def is_touching_wire(self):
         # todo: get wire/loop circuit signal
