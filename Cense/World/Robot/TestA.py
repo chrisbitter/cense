@@ -1,22 +1,30 @@
-import Cense.World.Robot.RTDE_Controller_CENSE as rtde
-while True:
-    print(rtde.Positions.all_positions)
+from Cense.World.Robot.rtde_controller import RTDE_Controller
+import time
 
-    rtde.go_start_via_path()
-    print ('Start Position')
+controller = RTDE_Controller()
 
-    rtde.move_to_position([-0.10782, 0.3822, 0.5866, 0.0, -0.136, 1.593])
-    print ('Position 1')
-    rtde.move_to_position([-0.10782, 0.4822, 0.5866, 0.0, -0.136, 1.593])
-    print ('Position 2')
-    rtde.move_to_position([-0.10782, 0.4822, 0.4866, 0.0, -0.136, 1.593])
-    print ('Position 3')
-    rtde.move_to_position([-0.10782, 0.3822, 0.4866, 0.0, -0.136, 1.593])
-    print ('Position 4')
+if True:
+    pose = controller.current_position()
 
-    rtde.go_start_via_path()
-    print ('Start Position')
+    print("Pose:", pose)
 
-    print(rtde.Positions.all_positions)
+    if pose:
 
-rtde.disconnect_rtde()
+        for _ in range(20):
+
+            pose[0] += .05
+            controller.move_to_pose(pose)
+
+            pose[2] += .05
+            controller.move_to_pose(pose)
+
+            now = time.time()
+            while time.time() - now < 5:
+                pass
+
+            pose[0] -= .05
+            controller.move_to_pose(pose)
+
+            pose[2] -= .05
+            controller.move_to_pose(pose)
+

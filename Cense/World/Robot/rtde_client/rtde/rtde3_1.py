@@ -102,7 +102,7 @@ class RTDE(object):
         version = self.__sendAndReceive(cmd, payload)
         return version == protocol
 
-    def send_input_setup(self, variables, types=[]):
+    def send_input_setup(self, variables, types):
         cmd = Command.RTDE_CONTROL_PACKAGE_SETUP_INPUTS
         payload = b','.join(variables)
         result = self.__sendAndReceive(cmd, payload)
@@ -115,7 +115,7 @@ class RTDE(object):
         self.__input_config[result.id] = result
         return serialize.DataObject.create_empty(variables, result.id)
 
-    def send_output_setup(self, variables, types=[]):
+    def send_output_setup(self, variables, types):
         cmd = Command.RTDE_CONTROL_PACKAGE_SETUP_OUTPUTS
         payload = b','.join(variables)
         result = self.__sendAndReceive(cmd, payload)
@@ -195,7 +195,7 @@ class RTDE(object):
             return None
 
     def __sendall(self, command, payload=b''):
-        fmt = '>HB'
+        fmt = b'>HB'
         # print('Payload: ', type(payload))
         size = struct.calcsize(fmt) + len(payload)
         buf = struct.pack(fmt, size, command) + payload
@@ -220,9 +220,10 @@ class RTDE(object):
     def __recv(self, command):
         while self.is_connected():
             readable, _, _ = select.select([self.__sock], [], [], DEFAULT_TIMEOUT)
-            # print(len(readable))
+
             if len(readable):
                 more = self.__sock.recv(4096)
+
                 # print(more, type(more), sep="    ")
                 if len(more) == 0:
                     self.__trigger_disconnected()
@@ -233,7 +234,6 @@ class RTDE(object):
             while len(self.__buf) >= 3:
                 # Attempts to extract a packet
                 packet_header = serialize.ControlHeader.unpack(self.__buf)
-                # print(len(self.__buf), packet_header.size, sep='      ')
                 if len(self.__buf) >= packet_header.size:
                     packet, self.__buf = self.__buf[3:packet_header.size], self.__buf[packet_header.size:]
                     data = self.__on_packet(packet_header.command, packet)

@@ -79,7 +79,7 @@ class RealWorld(object):
             else:
                 logging.error("Unknown action: %i" % action)
 
-            rtde.move_to_position(current_pos)
+            rtde.move_to_pose(current_pos)
 
             if self.is_touching_wire():
                 reward = self.PUNISHMENT_WIRE
@@ -146,19 +146,19 @@ class RealWorld(object):
         logging.debug("RealWorld reset")
         pose = self.START_POSE
         pose[2] = self.Z_DISENGAGED
-        rtde.move_to_position(pose)
+        rtde.move_to_pose(pose)
 
     def engage(self):
         logging.debug("RealWorld engage")
         pose = rtde.current_position()
         pose[2] = self.Z_ENGAGED
-        rtde.move_to_position(pose)
+        rtde.move_to_pose(pose)
 
     def disengage(self):
         logging.debug("RealWorld disengage")
         pose = rtde.current_position()
         pose[2] = self.Z_DISENGAGED
-        rtde.move_to_position(pose)
+        rtde.move_to_pose(pose)
 
     def test_movement(self):
         input("Test Movement")

@@ -9,7 +9,7 @@ of a UR5 from Universal Robots.
 
 import sys
 import logging
-import Cense.World.Robot.rtde_client.rtde.rtde as rtde
+import Cense.World.Robot.rtde_client.rtde.rtde3_1 as rtde
 import Cense.World.Robot.rtde_client.rtde.rtde_config as rtde_config
 from operator import sub, abs
 
