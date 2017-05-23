@@ -61,8 +61,10 @@ if __name__ == "__main__":
     # save_model()
     import csv
 
-    a = [[np.random.random()*10 for _ in range(r+5)] for r in range(10)]
+    #a = [[np.random.random()*10 for _ in range(r+5)] for r in range(10)]
 
-    with open("output.csv", "w") as f:
-        writer = csv.writer(f)
-        writer.writerows(a)
+    #with open("output.csv", "w") as f:
+    #    writer = csv.writer(f)
+    #    writer.writerows(a)
+
+    print(np.random.random_integers(0,50,5))

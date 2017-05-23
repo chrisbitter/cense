@@ -1,4 +1,4 @@
-import RTDE_Controller_CENSE as rtde
+import Cense.World.Robot.RTDE_Controller_CENSE as rtde
 while True:
     print(rtde.Positions.all_positions)
 

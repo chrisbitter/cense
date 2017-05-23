@@ -9,9 +9,9 @@ of a UR5 from Universal Robots.
 
 import sys
 import logging
-import rtde_client.rtde.rtde as rtde
-import rtde_client.rtde.rtde_config as rtde_config
-from operator import sub,abs
+import Cense.World.Robot.rtde_client.rtde.rtde as rtde
+import Cense.World.Robot.rtde_client.rtde.rtde_config as rtde_config
+from operator import sub, abs
 
 # begin variable and object setup
 ROBOT_HOST = '169.254.203.187'
@@ -20,10 +20,11 @@ config_filename = 'ur5_configuration_CENSE_test.xml'
 
 START_POSITION = []
 
-
 START_POSITION = [-0.339, 0.387, 0.742, 0, 0, 0]
-CENTER_POSITION = [-0.12028426334880883, 0.22592083702208404, 0.6888784830906385, -1.1776661923930953, -1.1603887788030312, -1.2277226782518533]
-CAMERA_POSITION = [-1.5806005636798304, -2.0574949423419397, 2.765082836151123, -3.0610531012164515, -1.6087492148028772, -1.5503385702716272]
+CENTER_POSITION = [-0.12028426334880883, 0.22592083702208404, 0.6888784830906385, -1.1776661923930953,
+                   -1.1603887788030312, -1.2277226782518533]
+CAMERA_POSITION = [-1.5806005636798304, -2.0574949423419397, 2.765082836151123, -3.0610531012164515,
+                   -1.6087492148028772, -1.5503385702716272]
 
 RTDE_PROTOCOL_VERSION = 1
 
@@ -96,7 +97,6 @@ def disconnect_rtde():
 
 # current_position gives the current position of the TCP relative to the defined Cartesian plane in list format
 def current_position():
-
     # Checks for the state of the connection
     state = con.receive()
 
@@ -122,16 +122,17 @@ class Positions:
 # setp_to_list converts a serialized data object to a list
 def setp_to_list(setp):
     list = []
-    for i in range(0,6):
+    for i in range(0, 6):
         list.append(setp.__dict__["input_double_register_%i" % i])
     return list
 
 
 # list_to_setp converts a list int0 serialized data object
 def list_to_setp(setp, list):
-    for i in range (0,6):
+    for i in range(0, 6):
         setp.__dict__["input_double_register_%i" % i] = list[i]
     return setp
+
 
 # move_to_position changes the position and orientation of the TCP of the robot relative to the defined Cartesian plane
 def move_to_position(new_pos):
@@ -157,7 +158,6 @@ def move_to_position(new_pos):
 
         # The output_int_register_0 defines if the robot is in motion.
         if state.output_int_register_0 != 0:
-
             # Changes the value from setp to the new position
             list_to_setp(setp, new_pos)
 
@@ -185,7 +185,6 @@ def move_to_position_no_append(new_pos):
 
         # The output_int_register_0 defines if the robot is in motion.
         if state.output_int_register_0 != 0:
-
             # Changes the value from setp to the new position
             list_to_setp(setp, new_pos)
 
@@ -200,7 +199,6 @@ def move_to_position_no_append(new_pos):
 
 # go_start_via_path moves the robot back to the defined starting position through all recorded positions
 def go_start_via_path():
-
     # Set joint to 0
     joint.input_int_register_1 = 0
     con.send(joint)
@@ -266,4 +264,3 @@ def go_camera():
     con.send(setp)
 
     return 'SUCCESS'
-

@@ -27,7 +27,7 @@ import select
 import sys
 import logging
 
-import serialize
+import Cense.World.Robot.rtde_client.rtde.serialize
 
 DEFAULT_TIMEOUT = 1.0
 
