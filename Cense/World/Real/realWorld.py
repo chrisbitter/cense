@@ -1,9 +1,10 @@
 # from Cense.World.world import World
 from Cense.World.Camera.camera import Camera
-import RTDE_Controller_CENSE as rtde
+from Cense.World.Robot.rtde_controller import RTDE_Controller
 import math
 import numpy as np
 import logging
+from enum import Enum
 
 
 class TerminalStateError(Exception):
@@ -12,20 +13,28 @@ class TerminalStateError(Exception):
 
 
 class RealWorld(object):
-    Z_DISENGAGED = -5
-    Z_ENGAGED = 0
+    # physical contraints
+    X_MIN = -.147
+    X_MAX = .282
 
-    # todo: Find correct coordinates
-    START_POSE = [-0.339, 0.387, Z_ENGAGED, 0, 0, 0]
-    GOAL_POSE = [-0.339, 0.387, Z_ENGAGED, 0, 0, 0]
+    Y_MIN = -.287
+    Y_MAX = -.333
 
-    MAX_ERROR = .001
-    MAX_ERROR_COUPLE = .01
+    Z_MIN = 0.492
+    Z_MAX = 0.873
+
+    Y_DISENGAGED = Y_MIN
+    Y_ENGAGED = Y_MAX
+
+    START_POSE = [X_MAX, Y_ENGAGED, (Z_MAX + Z_MIN) / 2, 0, 0, 0]
+    GOAL_POSE = [X_MIN, Y_ENGAGED, (Z_MAX + Z_MIN) / 2, 0, 0, 0]
+
+    # MAX_ERROR = .001
     THRESHOLD_NEW_CHECKPOINT = .1
     THRESHOLD_OLD_CHECKPOINT = .005
 
-    MAX_ERROR_SQUARED = MAX_ERROR * MAX_ERROR
-    MAX_ERROR_COUPLE_SQUARED = MAX_ERROR_COUPLE * MAX_ERROR_COUPLE
+    # MAX_ERROR_SQUARED = MAX_ERROR * MAX_ERROR
+    # MAX_ERROR_COUPLE_SQUARED = MAX_ERROR_COUPLE * MAX_ERROR_COUPLE
     THRESHOLD_NEW_CHECKPOINT_SQUARED = THRESHOLD_NEW_CHECKPOINT * THRESHOLD_NEW_CHECKPOINT
     THRESHOLD_OLD_CHECKPOINT_SQUARED = THRESHOLD_OLD_CHECKPOINT * THRESHOLD_OLD_CHECKPOINT
 
@@ -46,40 +55,52 @@ class RealWorld(object):
     rotation_constant = 45
     camera = None
 
+    controller = RTDE_Controller()
+
     def __init__(self):
         self.camera = Camera()
+
+        # move to disengaged plane
+        self.reset()
+
+        self.engage()
 
     def execute(self, action):
         # only move when state is not terminal
         if not self.in_terminal_state():
 
-            current_pos = rtde.current_position()
+            current_pos = self.controller.current_pose()
 
             if len(action) > 1:
                 action = np.argmax(action)
 
+            # all movements relative to TCP orientation
             if action == 0:
-                # Left
-                current_pos[0] -= self.translation_constant
+                # move in positive x
+                current_pos[0] += self.translation_constant*math.cos(current_pos[4])
+                current_pos[2] += self.translation_constant*math.sin(current_pos[4])
             elif action == 1:
-                # Right
-                current_pos[0] += self.translation_constant
+                # move in negative x
+                current_pos[0] -= self.translation_constant * math.cos(current_pos[4])
+                current_pos[2] -= self.translation_constant * math.sin(current_pos[4])
             elif action == 2:
-                # Up
-                current_pos[2] -= self.translation_constant
+                # move in positive z
+                current_pos[0] -= self.translation_constant * math.sin(current_pos[4])
+                current_pos[2] += self.translation_constant * math.cos(current_pos[4])
             elif action == 3:
-                # Down
-                current_pos[2] += self.translation_constant
+                # move in negative z
+                current_pos[0] += self.translation_constant * math.sin(current_pos[4])
+                current_pos[2] -= self.translation_constant * math.cos(current_pos[4])
             elif action == 4:
-                # Clockwise
-                current_pos[4] -= self.rotation_constant * math.pi / 180
+                # turn positively around y
+                current_pos[4] += self.rotation_constant * math.pi / 180
             elif action == 5:
-                # Counter-Clockwise
-                current_pos[4] += RealWorld.rotation_constant * math.pi / 180
+                # turn negatively around y
+                current_pos[4] -= RealWorld.rotation_constant * math.pi / 180
             else:
                 logging.error("Unknown action: %i" % action)
 
-            rtde.move_to_pose(current_pos)
+            self.controller.move_to_pose(current_pos)
 
             if self.is_touching_wire():
                 reward = self.PUNISHMENT_WIRE
@@ -131,7 +152,16 @@ class RealWorld(object):
         self.logging.debug("invert_game")
 
         self.disengage()
-        rtde.rotate_180()
+
+        pose = self.controller.current_pose()
+
+        if pose[4] < math.pi:
+            pose[4] += math.pi
+        else:
+            pose[4] -= math.pi
+
+        self.controller.move_to_pose(pose)
+
         self.engage()
 
         # switch start and goal
@@ -144,21 +174,25 @@ class RealWorld(object):
 
     def reset(self):
         logging.debug("RealWorld reset")
+        pose = self.controller.current_pose()
+        pose[1] = self.Y_DISENGAGED
+        self.controller.move_to_pose(pose)
+
         pose = self.START_POSE
-        pose[2] = self.Z_DISENGAGED
-        rtde.move_to_pose(pose)
+        pose[1] = self.Y_DISENGAGED
+        self.controller.move_to_pose(pose)
 
     def engage(self):
         logging.debug("RealWorld engage")
-        pose = rtde.current_position()
-        pose[2] = self.Z_ENGAGED
-        rtde.move_to_pose(pose)
+        pose = self.controller.current_pose()
+        pose[1] = self.Y_ENGAGED
+        self.controller.move_to_pose(pose)
 
     def disengage(self):
         logging.debug("RealWorld disengage")
-        pose = rtde.current_position()
-        pose[2] = self.Z_DISENGAGED
-        rtde.move_to_pose(pose)
+        pose = self.controller.current_pose()
+        pose[1] = self.Y_DISENGAGED
+        self.controller.move_to_pose(pose)
 
     def test_movement(self):
         input("Test Movement")

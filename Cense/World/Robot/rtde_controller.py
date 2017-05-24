@@ -14,29 +14,36 @@ import Cense.World.Robot.rtde_client.rtde.rtde_config as rtde_config
 from operator import sub, abs
 import time
 
+
+class IllegalPoseException(Exception):
+    pass
+
+
 class RTDE_Controller:
     # begin variable and object setup
-    ROBOT_HOST = '169.254.203.187'
+    ROBOT_HOST = '137.226.189.172'
     ROBOT_PORT = 30004
     config_filename = 'ur5_configuration_CENSE_test.xml'
-
-    START_POSITION = [-0.387, -0.378, 0.560, 0, 0, 0]
-    DIS_START_POSITION = [-0.387, -0.328, 0.560, 0, 0, 0]
-    CENTER_POSITION = [0.11867, -0.30962, 0.71688, 0, 0, 0]
-    CAMERA_POSITION = [1.58721, -1.87299, 2.67201, -2.94720, -1.60205, 1.61322]
-    CAMERA_POSITION_POS = [0.11292, -0.26907, 0.19632, 0.99234, -0.01575, -0.03681]
 
     RTDE_PROTOCOL_VERSION = 1
 
     keep_running = True
 
-    MAX_ERROR = 0.0005
+    X_MIN = -.147
+    X_MAX = .287
+
+    Y_MIN = -.333
+    Y_MAX = -.284
+
+    Z_MIN = 0.492
+    Z_MAX = 0.873
 
     connection = None
 
     setp = None
 
     def __init__(self):
+        print("Connecting Robot")
         logging.getLogger().setLevel(logging.INFO)
 
         conf = rtde_config.ConfigFile(self.config_filename)
@@ -66,9 +73,7 @@ class RTDE_Controller:
         # Send configuration for output and input recipes
         self.connection.send_output_setup(state_names, state_types)
 
-        print("send input setup")
         self.setp = self.connection.send_input_setup(setp_names, setp_types)
-        print("done")
 
         # Set input registers (double) to 0
         self.setp.input_double_register_0 = 0
@@ -84,6 +89,7 @@ class RTDE_Controller:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        print("Disconnecting Robot")
         self.connection.disconnect()
 
     # Starts data sync
@@ -92,34 +98,25 @@ class RTDE_Controller:
         if not self.connection.send_start():
             return False
 
-
     # Pauses the data sync
     def pause_sync(self):
         self.connection.send_pause()
-
 
     # Disconnects the RTDE
     def disconnect_rtde(self):
         self.connection.disconnect()
 
-
     # current_position gives the current position of the TCP relative to the defined Cartesian plane in list format
-    def current_position(self):
-
-        print("Current pose")
+    def current_pose(self):
         # Checks for the state of the connection
         state = self.connection.receive()
-
-        print("state: ", state)
 
         # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it returns 'Failed'
         if state is None:
             return None
-        # print(state.__dict__)
 
         # If successful it returns the list with the current TCP position
         return state.__dict__[b'actual_TCP_pose']
-
 
     # setp_to_list converts a serialized data object to a list
     def setp_to_list(self, setp):
@@ -128,52 +125,37 @@ class RTDE_Controller:
             list.append(setp.__dict__[b"input_double_register_%i" % i])
         return list
 
-
     # list_to_setp converts a list int0 serialized data object
     def list_to_setp(self, setp, list):
         for i in range(6):
             setp.__dict__[b"input_double_register_%i" % i] = list[i]
         return setp
 
-
     # move_to_position changes the position and orientation of the TCP of the robot relative to the defined Cartesian plane
     def move_to_pose(self, new_pose):
+
+        if new_pose[0] < self.X_MIN or new_pose[0] > self.X_MAX \
+                or new_pose[1] < self.Y_MIN or new_pose[1] > self.Y_MAX \
+                or new_pose[2] < self.Z_MIN or new_pose[2] > self.Z_MAX:
+            print(new_pose[0] < self.X_MIN, new_pose[0] > self.X_MAX,
+                  new_pose[1] < self.Y_MIN, new_pose[1] > self.Y_MAX,
+                  new_pose[2] < self.Z_MIN, new_pose[2] > self.Z_MAX)
+            raise IllegalPoseException
+
         # Checks for the state of the connection
         state = self.connection.receive()
 
-        # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it returns 'Failed'
+        # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it throws an connection error
         if state is None:
-            return 'Failed'
+            raise ConnectionError
 
         self.list_to_setp(self.setp, new_pose)
 
         # Send new position
         self.connection.send(self.setp)
 
+        # wait until robot finishes move
         while True:
-
             state = self.connection.receive()
             if state.__dict__[b'output_int_register_0'] == 0:
                 break
-
-        # # Will try to move to position till current_position() is within a max error range from new_pos
-        # while max(map(abs, map(sub, self.current_position(), new_pose))) >= self.MAX_ERROR:
-        #     # Checks for the state of the connection
-        #     state = self.connection.receive()
-        #
-        #     # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it returns 'Failed'
-        #     if state is None:
-        #         return 'Failed'
-        #
-        #     # The output_int_register_0 defines if the robot is in motion.
-        #     if state.__dict__[b'output_int_register_0'] != 0:
-        #         # Changes the value from setp to the new position
-        #         self.list_to_setp(self.setp, new_pose)
-        #
-        #         # Send new position
-        #         self.connection.send(self.setp)
-        #
-        #         # self.connection.send(watchdog)
-
-        # If successful the RTDE sync is paused, new position is added to all_positions, and it returns 'SUCCESS'
-        return 'SUCCESS'

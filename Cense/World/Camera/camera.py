@@ -6,34 +6,30 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib.image
 
+from VideoCapture import Device
+
 
 class Camera(object):
     __camera = None
     SIZE = None
 
     def __init__(self, size=(50, 50)):
-        # init camera
-        pygame.camera.init()
-        cameras = pygame.camera.list_cameras()
-        self.__camera = pygame.camera.Camera(cameras[0])
-        self.__camera.start()
 
-        # take one image to get camera ready
-        self.__camera.get_image()
+        self.__camera = Device(1)
+
         self.SIZE = size
 
     def shutdown(self):
-        self.__camera.stop()
+        del self.__camera
         pygame.quit()
 
     def capture_image(self, debug, imgpath=''):
         # take picture
-        frame = self.__camera.get_image()
+        frame = self.__camera.getImage()
 
         # convert to array
-        rgb = np.array(pygame.surfarray.pixels3d(frame))
-
-        # print(rgb.shape)
+        rgb = np.array(frame.getdata(),
+                         np.uint8).reshape(frame.size[1], frame.size[0], 3)
 
         if debug:
             rgb = matplotlib.image.imread(imgpath)
@@ -60,6 +56,7 @@ def debug_with_pictures():
         plt.imshow(image, cmap='gray')
     plt.plot()
     cam.shutdown()
+
 
 def take_picture():
     cam = Camera((50, 50))
@@ -102,7 +99,23 @@ def test_1():
     plt.show()
     cam.shutdown()
 
+
 if __name__ == '__main__':
     # debug_with_pictures()
     take_picture()
     # test_1()
+
+    # cam = Device(1)
+    #
+    # for _ in range(10):
+    #     now = time.time()
+    #     img = cam.getImage()
+    #     image = np.array(img.getdata(),
+    #                      np.uint8).reshape(img.size[1], img.size[0], 3)
+    #     print(time.time() - now)
+    # plt.figure()
+    # plt.imshow(image, cmap='gray')
+    #
+    # plt.show()
+    #
+    # print(img)
