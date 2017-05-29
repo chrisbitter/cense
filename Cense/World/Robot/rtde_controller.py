@@ -13,7 +13,8 @@ from Cense.World.Robot.rtde_client.rtde.rtde3_1 import RTDE
 import Cense.World.Robot.rtde_client.rtde.rtde_config as rtde_config
 from operator import sub, abs
 import time
-
+import numpy as np
+import os
 
 class IllegalPoseException(Exception):
     pass
@@ -23,20 +24,16 @@ class RTDE_Controller:
     # begin variable and object setup
     ROBOT_HOST = '137.226.189.172'
     ROBOT_PORT = 30004
-    config_filename = 'ur5_configuration_CENSE_test.xml'
+    config_filename = fn = os.path.join(os.path.dirname(__file__), 'ur5_configuration_CENSE_test.xml')
 
     RTDE_PROTOCOL_VERSION = 1
 
+    ERROR = .001
+
     keep_running = True
 
-    X_MIN = -.147
-    X_MAX = .287
-
-    Y_MIN = -.333
-    Y_MAX = -.284
-
-    Z_MIN = 0.492
-    Z_MAX = 0.873
+    CONSTRAINT_MIN = np.array([-.23, -.26, 0.35])
+    CONSTRAINT_MAX = np.array([.36, -.19, 0.85])
 
     connection = None
 
@@ -44,7 +41,7 @@ class RTDE_Controller:
 
     def __init__(self):
         print("Connecting Robot")
-        logging.getLogger().setLevel(logging.INFO)
+        logging.getLogger().setLevel(logging.ERROR)
 
         conf = rtde_config.ConfigFile(self.config_filename)
         state_names, state_types = conf.get_recipe('state')
@@ -109,37 +106,30 @@ class RTDE_Controller:
     # current_position gives the current position of the TCP relative to the defined Cartesian plane in list format
     def current_pose(self):
         # Checks for the state of the connection
-        state = self.connection.receive()
+        # wait until robot finishes move
+        while True:
+            state = self.connection.receive()
+            if state.__dict__[b'output_int_register_0'] == 0:
+                break
 
         # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it returns 'Failed'
         if state is None:
             return None
 
         # If successful it returns the list with the current TCP position
-        return state.__dict__[b'actual_TCP_pose']
-
-    # setp_to_list converts a serialized data object to a list
-    def setp_to_list(self, setp):
-        list = []
-        for i in range(0, 6):
-            list.append(setp.__dict__[b"input_double_register_%i" % i])
-        return list
-
-    # list_to_setp converts a list int0 serialized data object
-    def list_to_setp(self, setp, list):
-        for i in range(6):
-            setp.__dict__[b"input_double_register_%i" % i] = list[i]
-        return setp
+        return np.array(state.__dict__[b'actual_TCP_pose'])
 
     # move_to_position changes the position and orientation of the TCP of the robot relative to the defined Cartesian plane
     def move_to_pose(self, new_pose):
+        #print("Move: ", new_pose)
 
-        if new_pose[0] < self.X_MIN or new_pose[0] > self.X_MAX \
-                or new_pose[1] < self.Y_MIN or new_pose[1] > self.Y_MAX \
-                or new_pose[2] < self.Z_MIN or new_pose[2] > self.Z_MAX:
-            print(new_pose[0] < self.X_MIN, new_pose[0] > self.X_MAX,
-                  new_pose[1] < self.Y_MIN, new_pose[1] > self.Y_MAX,
-                  new_pose[2] < self.Z_MIN, new_pose[2] > self.Z_MAX)
+        if new_pose[0] < self.CONSTRAINT_MIN[0] or new_pose[0] > self.CONSTRAINT_MAX[0] \
+                or new_pose[1] < self.CONSTRAINT_MIN[1] or new_pose[1] > self.CONSTRAINT_MAX[1] \
+                or new_pose[2] < self.CONSTRAINT_MIN[2] or new_pose[2] > self.CONSTRAINT_MAX[2]:
+            # print(new_pose)
+            # print(new_pose[0] < self.CONSTRAINT_MIN[0], new_pose[0] > self.CONSTRAINT_MAX[0],
+            #       new_pose[1] < self.CONSTRAINT_MIN[1], new_pose[1] > self.CONSTRAINT_MAX[1],
+            #       new_pose[2] < self.CONSTRAINT_MIN[2], new_pose[2] > self.CONSTRAINT_MAX[2])
             raise IllegalPoseException
 
         # Checks for the state of the connection
@@ -149,7 +139,11 @@ class RTDE_Controller:
         if state is None:
             raise ConnectionError
 
-        self.list_to_setp(self.setp, new_pose)
+        # set registers to new pose values
+        for i in range(6):
+            self.setp.__dict__[b"input_double_register_" + str(i).encode()] = new_pose[i]
+
+        #while np.linalg.norm(self.current_pose() - new_pose) > self.ERROR:
 
         # Send new position
         self.connection.send(self.setp)

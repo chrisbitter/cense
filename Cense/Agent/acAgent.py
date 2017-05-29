@@ -9,7 +9,7 @@ from Cense.NeuralNetworkFactory.nnFactory import model_ac as model
 from Cense.World.Real.realWorld import RealWorld as World
 from Cense.World.Real.realWorld import TerminalStateError
 from Resources.PrioritizedExperienceReplay.rank_based import Experience
-from Cense.World.Camera.camera import Camera
+from Cense.World.Camera.camera_pygame import Camera
 
 from keras.models import Model
 import numpy as np
@@ -57,7 +57,7 @@ class AC_Agent(object):
 
             self.world.init_nonterminal_state()
 
-            state, terminal = self.world.observe()
+            state, terminal = self.world.observe_state()
 
             while not terminal:
                 episode_steps += 1

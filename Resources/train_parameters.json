@@ -1,0 +1,5 @@
+{
+  "do_train": 1,
+  "exploration_probability": 0.8,
+  "runs_before_update": 10
+}

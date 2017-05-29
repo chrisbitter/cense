@@ -2,10 +2,11 @@ import threading
 import logging
 from Cense.Trainer.gpu import GPU_Trainer
 import matplotlib.pyplot as plt
+import json
 
-from Cense.World.dummy_world import DummyWorld as World
+from Cense.World.Real.realWorld import RealWorld as World
 # from Resources.PrioritizedExperienceReplay.rank_based import Experience
-from Cense.World.dummy_world import TerminalStateError
+from Cense.World.Real.realWorld import TerminalStateError
 
 import Cense.NeuralNetworkFactory.nnFactory as factory
 import time
@@ -21,7 +22,7 @@ class DeepQNetworkAgent(object):
     real_world = None
     model_file = "../../Resources/nn-data/model.json"
     weights_file = "../../Resources/nn-data/weights.h5"
-    train_switch_file = "../../Resources/train_switch"
+    train_parameters = "../../Resources/train_parameters.json"
     # image_path = ""
     original_epsilon = 0
     epsilon = 0
@@ -59,15 +60,19 @@ class DeepQNetworkAgent(object):
 
         self.trainer = GPU_Trainer(project_root_folder)
 
-        tic = time.time()
         self.trainer.send_model_to_gpu()
-        toc = time.time()
-        print("Send model to GPU: ", toc-tic)
 
-    def train(self, exploration_probability=.1, runs_before_update=10):
-        print("train")
+    def train(self):
 
-        open(self.train_switch_file, 'w')
+        with open(self.train_parameters) as json_data:
+            config = json.load(json_data)
+
+        exploration_probability = config["exploration_probability"]
+        runs_before_update = config["runs_before_update"]
+        do_train = config["do_train"]
+
+        print("Train with exploration probability ", exploration_probability, "and updates after", runs_before_update,
+              "runs")
 
         states = []
         actions = []
@@ -77,19 +82,32 @@ class DeepQNetworkAgent(object):
 
         # statistics
         runs = []
+        run_number = 0
 
-        while os.path.isfile(self.train_switch_file):
+        while do_train:
 
             # start new run
-            print("New run...")
+            with open(self.train_parameters) as json_data:
+                config = json.load(json_data)
+
+            if exploration_probability != config["exploration_probability"]:
+                exploration_probability = config["exploration_probability"]
+                print("Using new exploration probability: ", exploration_probability)
+                
+            if runs_before_update != config["runs_before_update"]:
+                runs_before_update = config["runs_before_update"]
+                print("Now updating net every", runs_before_update, "run")
+
+            do_train = config["do_train"]
 
             # statistics
+            run_number += 1
             run_reward = 0
             run_steps = 0
 
-            self.world.init_nonterminal_state()
+            self.world.reset()
 
-            state, terminal = self.world.observe()
+            state, terminal = self.world.observe_state(), self.world.in_terminal_state()
 
             while not terminal:
                 # evaluate policy and value
@@ -119,24 +137,25 @@ class DeepQNetworkAgent(object):
                 run_reward += reward
 
             if run_steps:
-                print("Run: ", run_steps, "steps")
+                print("Run: ", run_number, "\n\t", "steps:", run_steps, "\n\t", "reward:", run_reward)
                 runs.append([run_steps, run_reward])
 
             # train nn after collecting some experience
-            if len(runs) % runs_before_update == 0:
-                logging.debug("update net")
+            if len(runs) and len(runs) % runs_before_update == 0:
+                print("Train on GPU")
+                #logging.debug("update net")
 
                 tic = time.time()
                 self.trainer.send_experience_to_gpu(states, actions, rewards, suc_states, terminals)
                 toc = time.time()
-                print("Send experience: ", toc - tic)
+                print("\tSend experience: ", toc - tic)
 
                 self.trainer.train_on_gpu()
 
                 tic = time.time()
                 self.trainer.fetch_model_weights_from_gpu()
                 toc = time.time()
-                print("Fetch weights: ", toc - tic)
+                print("\tGet weights: ", toc - tic)
 
                 self.model.load_weights(self.weights_file)
 
@@ -145,6 +164,8 @@ class DeepQNetworkAgent(object):
                 rewards = []
                 suc_states = []
                 terminals = []
+
+        print("Stop training")
 
         plt.figure(1)
 
@@ -161,11 +182,9 @@ class DeepQNetworkAgent(object):
         plt.title('rewards')
         plt.show()
 
-        print("Stop training")
-
 
 if __name__ == '__main__':
     print("Starting from dqnAgent")
     agent = DeepQNetworkAgent()
 
-    agent.train(10)
+    agent.train(.8)

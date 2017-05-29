@@ -14,22 +14,29 @@ class Camera(object):
     SIZE = None
 
     def __init__(self, size=(50, 50)):
+        # init camera
+        pygame.camera.init()
+        cameras = pygame.camera.list_cameras()
 
-        self.__camera = Device(1)
+        self.__camera = pygame.camera.Camera(cameras[0])
+        self.__camera.start()
 
+        # take one image to get camera ready
+        self.__camera.get_image()
         self.SIZE = size
 
     def shutdown(self):
-        del self.__camera
+        self.__camera.stop()
         pygame.quit()
 
     def capture_image(self, debug, imgpath=''):
         # take picture
-        frame = self.__camera.getImage()
+        frame = self.__camera.get_image()
 
         # convert to array
-        rgb = np.array(frame.getdata(),
-                         np.uint8).reshape(frame.size[1], frame.size[0], 3)
+        rgb = np.array(pygame.surfarray.pixels3d(frame))
+
+        # print(rgb.shape)
 
         if debug:
             rgb = matplotlib.image.imread(imgpath)
@@ -102,8 +109,12 @@ def test_1():
 
 if __name__ == '__main__':
     # debug_with_pictures()
-    take_picture()
+    # take_picture()
     # test_1()
+
+    now = time.time()
+    take_picture()
+    print(time.time() - now)
 
     # cam = Device(1)
     #

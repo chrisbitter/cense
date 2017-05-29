@@ -1,7 +1,9 @@
 import numpy as np
 import h5py
-import Cense.NeuralNetworkFactory.nnFactory as factory
+#import Cense.NeuralNetworkFactory.nnFactory as factory
 
+import time
+from pyfirmata import Arduino, util
 
 def save_array():
     states = []
@@ -53,13 +55,40 @@ def save_model():
     model.save_weights("weights.h5")
 
 
+def read_arduino():
+    board = Arduino('com3')
+
+    it = util.Iterator(board)
+    it.start()
+
+    board.analog[0].enable_reporting()
+    board.analog[1].enable_reporting()
+
+    analog_0 = board.get_pin('a:0:i')
+    analog_1 = board.get_pin('a:1:i')
+
+    while True:
+
+        value_a0 = analog_0.read()
+        value_a1 = analog_1.read()
+
+        if value_a0 is not None and value_a1 is not None:
+
+            if value_a0 > value_a1:
+                board.digital[13].write(1)
+
+            else:
+                board.digital[13].write(0)
+
+
+
 if __name__ == "__main__":
     # save_array()
 
     # load_array()
 
     # save_model()
-    import csv
+    #import csv
 
     #a = [[np.random.random()*10 for _ in range(r+5)] for r in range(10)]
 
@@ -67,4 +96,6 @@ if __name__ == "__main__":
     #    writer = csv.writer(f)
     #    writer.writerows(a)
 
-    print(np.random.random_integers(0,50,5))
+    #print(np.random.random_integers(0,50,5))
+
+    read_arduino()

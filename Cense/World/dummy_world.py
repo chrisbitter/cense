@@ -1,5 +1,5 @@
 # from Cense.World.world import World
-from Cense.World.Camera.camera import Camera
+from Cense.World.Camera.camera_pygame import Camera
 # import RTDE_Controller_CENSE as rtde
 import math
 import numpy as np

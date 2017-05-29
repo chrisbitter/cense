@@ -10,7 +10,7 @@ from Cense.Decider.NeuralNetwork.acDecider import AcDecider as Decider
 
 from Cense.World.Real.realWorld import RealWorld as World
 from Resources.PrioritizedExperienceReplay.rank_based import Experience
-from Cense.World.Camera.camera import Camera
+from Cense.World.Camera.camera_pygame import Camera
 
 from keras.models import Model
 
@@ -118,7 +118,7 @@ class NeuralNetworkAgent(object):
             self.world.init_nonterminal_state()
 
             # observe initial state (discard reward)
-            state, _, terminal = self.world.observe(None)
+            state, _, terminal = self.world.observe_state(None)
 
             while not terminal:
                 action = decider.decide(state)
@@ -144,7 +144,7 @@ class NeuralNetworkAgent(object):
         try:
             self.world.init_nonterminal_state()
 
-            state = self.world.observe()
+            state = self.world.observe_state()
 
             while not self.world.in_terminal_state():
                 action = model(state)

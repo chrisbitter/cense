@@ -143,8 +143,7 @@ class GPU_Trainer(object):
 
         ssh.connect(self.host, self.port, self.username, self.password)
 
-
-        command = "python3 " + self.script_remote
+        command = "python " + self.script_remote
         stdin, stdout, stderr = ssh.exec_command(command)
 
         exit_status = stdout.channel.recv_exit_status()
