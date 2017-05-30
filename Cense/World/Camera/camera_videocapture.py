@@ -31,7 +31,7 @@ class Camera(object):
         rgb = np.array(frame.getdata(),
                          np.uint8).reshape(frame.size[1], frame.size[0], 3)
 
-        rgb_cropped = rgb[200:,360:,:]
+        rgb_cropped = rgb[180:,200:500,:]
 
         # convert to gray image
         gray = np.dot(rgb_cropped[..., :3], [.299, .587, .114])
@@ -44,20 +44,45 @@ class Camera(object):
         return state
 
 
-def debug_with_pictures():
-    cam = Camera()
-    for i in range(1, 4):
-        path = "Draht_" + str(i) + ".png"
-        start = time.time()
-        image = cam.capture_image(True, path)
-        end = time.time()
-        print(end - start)
+    def calibrate_camera(self):
+        # take picture
+        frame = self.__camera.getImage()
 
         plt.figure()
-        plt.imshow(image, cmap='gray')
-    plt.plot()
-    cam.shutdown()
 
+        # convert to array
+        rgb = np.array(frame.getdata(),
+                         np.uint8).reshape(frame.size[1], frame.size[0], 3)
+
+        plt.subplot(221)
+        plt.imshow(rgb)
+
+        print(rgb.shape)
+
+        rgb_cropped = rgb[180:,200:500,:]
+
+        print(rgb_cropped.shape)
+
+        plt.subplot(222)
+        plt.imshow(rgb_cropped)
+
+        # convert to gray image
+        gray = np.dot(rgb_cropped[..., :3], [.299, .587, .114])
+
+        plt.subplot(223)
+        plt.imshow(gray, cmap='gray')
+
+        #gray = gray[200:][200:]
+        # rescale image
+        # state = gray
+        state = imresize(gray, self.SIZE)
+
+        plt.subplot(224)
+        plt.imshow(state, cmap='gray')
+
+        plt.show()
+
+        return state
 
 def take_picture():
     cam = Camera((50, 50))
@@ -102,21 +127,6 @@ def test_1():
 
 
 if __name__ == '__main__':
-    # debug_with_pictures()
-    take_picture()
-    # test_1()
-
-    # cam = Device(1)
-    #
-    # for _ in range(10):
-    #     now = time.time()
-    #     img = cam.getImage()
-    #     image = np.array(img.getdata(),
-    #                      np.uint8).reshape(img.size[1], img.size[0], 3)
-    #     print(time.time() - now)
-    # plt.figure()
-    # plt.imshow(image, cmap='gray')
-    #
-    # plt.show()
-    #
-    # print(img)
+    cam = Camera((50, 50))
+    cam.calibrate_camera()
+    cam.shutdown()

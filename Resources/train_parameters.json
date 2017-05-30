@@ -1,5 +1,6 @@
 {
-  "do_train": 1,
-  "exploration_probability": 0.8,
+  "do_train": 0,
+  "use_old_model": 1,
+  "exploration_probability": 0.2,
   "runs_before_update": 10
 }

@@ -31,9 +31,10 @@ class RTDE_Controller:
     ERROR = .001
 
     keep_running = True
-
-    CONSTRAINT_MIN = np.array([-.23, -.26, 0.35])
-    CONSTRAINT_MAX = np.array([.36, -.19, 0.85])
+    -.185
+    Y_ENGAGED = -.215
+    CONSTRAINT_MIN = np.array([-.23, -.235, 0.35])
+    CONSTRAINT_MAX = np.array([.36, -.16, 0.85])
 
     connection = None
 

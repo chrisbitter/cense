@@ -13,22 +13,20 @@ class TerminalStateError(Exception):
 
 
 class RealWorld(object):
-    Y_DISENGAGED = -.215
-    Y_ENGAGED = -.245
+    Y_DISENGAGED = -.185
+    Y_ENGAGED = -.215
 
-    # 0.34867198 -0.32503722  0.482323
-    START_POSE = np.array([.345, Y_ENGAGED, .482, 0, 0, 0])
-    # -0.215311   -0.32231305  0.50007683
-    GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, 0, 0])
+    START_POSE = np.array([.345, Y_ENGAGED, .482, 0, math.pi/2, 0])
+    GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, math.pi/2, 0])
 
-    CHECKPOINT_DISTANCE = .01
-    DISTANCE_THRESHOLD = .003
+    CHECKPOINT_DISTANCE = .04
+    DISTANCE_THRESHOLD = .02
 
-    PUNISHMENT_ILLEGAL_POSE = -5
-    PUNISHMENT_WIRE = -30
-    PUNISHMENT_OLD_CHECKPOINT = -15
-    REWARD_GOAL = 50
-    REWARD_NEW_CHECKPOINT = 15
+    PUNISHMENT_ILLEGAL_POSE = -100
+    PUNISHMENT_WIRE = -50
+    PUNISHMENT_OLD_CHECKPOINT = -30
+    REWARD_GOAL = 100
+    REWARD_NEW_CHECKPOINT = 100
     REWARD_GENERIC = -1
 
     STATE_DIMENSIONS = (50, 50)
@@ -36,7 +34,7 @@ class RealWorld(object):
 
     __checkpoints = []
 
-    translation_constant = .005
+    translation_constant = .01
     rotation_constant = 30
     camera = None
 
@@ -49,13 +47,10 @@ class RealWorld(object):
         self.camera = Camera()
         self.loop = Loop()
 
-        # reset to START_POSE
-        self.reset()
-
-    def execute(self, action):
+    def execute(self, action, force=False):
 
         # only move when state is not terminal
-        if not self.in_terminal_state():
+        if not self.loop.has_touched_wire() or force:
 
             next_pose = self.controller.current_pose()
 
@@ -101,7 +96,6 @@ class RealWorld(object):
 
                 elif self.is_at_goal():
                     reward = self.REWARD_GOAL
-                    self.reset()
                     terminal = True
 
                 elif self.is_at_new_checkpoint():
@@ -119,7 +113,7 @@ class RealWorld(object):
                 state = self.observe_state()
 
         else:
-            raise TerminalStateError("Cannot perform actions in terminal states!")
+            raise TerminalStateError(self.PUNISHMENT_WIRE)
 
         return state, reward, terminal
 
@@ -145,7 +139,7 @@ class RealWorld(object):
 
     def is_at_new_checkpoint(self):
         current_pose = self.controller.current_pose()
-        return np.linalg.norm(current_pose[:3] - self.__checkpoints[-1][:3]) < self.DISTANCE_THRESHOLD
+        return np.linalg.norm(current_pose[:3] - self.__checkpoints[-1][:3]) > self.CHECKPOINT_DISTANCE
 
     def regress_checkpoints(self):
         self.__checkpoints.pop()
@@ -159,8 +153,6 @@ class RealWorld(object):
 
         logging.debug("invert_game")
 
-        #self.disengage()
-
         pose = self.controller.current_pose()
 
         if pose[4] < math.pi:
@@ -169,8 +161,6 @@ class RealWorld(object):
             pose[4] -= math.pi
 
         self.controller.move_to_pose(pose)
-
-        #self.engage()
 
         # switch start and goal
         temp = self.START_POSE
@@ -181,11 +171,35 @@ class RealWorld(object):
         self.__checkpoints = [self.START_POSE]
 
     def init_nonterminal_state(self):
-        print("init_nonterminal_state")
-        self.reset()
+        terminal = True
+        print("last: ", self.last_action)
+        while terminal:
+            if self.last_action is not None:
+                if self.last_action % 2:
+                    reversed_action = self.last_action - 1
+                else:
+                    reversed_action = self.last_action + 1
+                print("execute: ", reversed_action)
+                self.execute(reversed_action, force=True)
+                terminal = self.loop.has_touched_wire()
+                self.last_action = None
+                print("terminal: ", terminal)
+            else:
+                self.reset()
+                # Trust that reset leads to nonterminal state
+                terminal = False
 
     def reset(self):
         logging.debug("RealWorld reset")
+        print("reset")
+
+        # first undo last step before decoupling
+        if self.last_action is not None:
+            if self.last_action % 2:
+                reversed_action = self.last_action - 1
+            else:
+                reversed_action = self.last_action + 1
+            self.execute(reversed_action, force=True)
 
         pose = self.controller.current_pose()
         pose[1] = self.Y_DISENGAGED
@@ -197,23 +211,12 @@ class RealWorld(object):
 
         # might have touched wire when disengaging
         self.loop.touched_wire = False
+        self.last_action = None
 
         pose[1] = self.Y_ENGAGED
         self.controller.move_to_pose(pose)
 
         self.__checkpoints = [self.START_POSE[:3]]
-
-    # def engage(self):
-    #     logging.debug("RealWorld engage")
-    #     pose = self.controller.current_pose()
-    #     pose[1] = self.Y_ENGAGED
-    #     self.controller.move_to_pose(pose)
-    #
-    # def disengage(self):
-    #     logging.debug("RealWorld disengage")
-    #     pose = self.controller.current_pose()
-    #     pose[1] = self.Y_DISENGAGED
-    #     self.controller.move_to_pose(pose)
 
     def test_movement(self):
         input("Test Movement")
@@ -248,8 +251,10 @@ class RealWorld(object):
         input("Test is_touching_wire\nPRESS ENTER")
         print(self.has_touched_wire())
 
-
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.ERROR)
+    logging.getLogger().setLevel(logging.DEBUG)
 
     world = RealWorld()
+
+    world.reset()
+    print("done")

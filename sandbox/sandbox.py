@@ -1,7 +1,8 @@
 import numpy as np
 import h5py
 #import Cense.NeuralNetworkFactory.nnFactory as factory
-
+from Cense.World.Camera.camera_videocapture import Camera
+import matplotlib.pyplot as plt
 import time
 from pyfirmata import Arduino, util
 
@@ -80,6 +81,68 @@ def read_arduino():
             else:
                 board.digital[13].write(0)
 
+def stream_webcam():
+    cam = Camera()
+
+    fig = plt.figure(0)
+    plt.ion()
+    plt.imshow(np.zeros((50, 50)), cmap='gray')
+    plt.pause(.001)
+    # fig.canvas.draw()
+    # plt.show(block=False)
+
+    for _ in range(100):
+        state = cam.capture_image()
+        plt.imshow(state)
+        plt.pause(.001)
+        print("done")
+
+def plot_reward_live():
+
+    plt.subplot(221)
+    hl, = plt.plot([], [])
+
+    ax1 = plt.gca()
+
+    plt.subplot(222)
+    h2, = plt.plot([], [])
+
+    ax2 = plt.gca()
+
+    plt.subplot(223)
+    plt.xlabel('action')
+    plt.ylabel('q-value')
+    # plt.bar
+    q_values = [-4,-2,0,2,4,1]
+    bar_plot = plt.bar(list(range(6)), q_values)
+    bar_ax = plt.gca()
+
+    for i in range(100):
+        x = [.1*i]
+        y1 = [np.sin(x)]
+        y2 = [np.cos(x)]
+
+        q_values = [x*1.5 for x in q_values]
+
+        for rect, q_val in zip(bar_plot, q_values):
+            rect.set_height(q_val)
+
+        #bar_ax.set_ylim(np.min(q_values), np.max(q_values))
+        bar_ax.relim()
+        bar_ax.autoscale_view()
+
+        hl.set_xdata(np.append(hl.get_xdata(), x))
+        hl.set_ydata(np.append(hl.get_ydata(), y1))
+        h2.set_xdata(np.append(h2.get_xdata(), x))
+        h2.set_ydata(np.append(h2.get_ydata(), y2))
+        ax1.relim()
+        ax1.autoscale_view()
+        ax2.relim()
+        ax2.autoscale_view()
+        plt.draw()
+        plt.pause(.001)
+
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -98,4 +161,8 @@ if __name__ == "__main__":
 
     #print(np.random.random_integers(0,50,5))
 
-    read_arduino()
+    #read_arduino()
+
+    #stream_webcam()
+
+    plot_reward_live()
