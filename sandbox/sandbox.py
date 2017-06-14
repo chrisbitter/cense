@@ -99,6 +99,8 @@ def stream_webcam():
 
 def plot_reward_live():
 
+    cam = Camera()
+
     plt.subplot(221)
     hl, = plt.plot([], [])
 
@@ -113,11 +115,15 @@ def plot_reward_live():
     plt.xlabel('action')
     plt.ylabel('q-value')
     # plt.bar
-    q_values = [-4,-2,0,2,4,1]
+    q_values = [-4,-2,-1,-2,-4,-1]
     bar_plot = plt.bar(list(range(6)), q_values)
     bar_ax = plt.gca()
 
-    for i in range(100):
+    plt.subplot(224)
+    cam_view = plt.imshow(np.zeros((50, 50)), cmap='gray')
+    cam_view.norm.vmax = 1
+
+    for i in range(50):
         x = [.1*i]
         y1 = [np.sin(x)]
         y2 = [np.cos(x)]
@@ -139,15 +145,27 @@ def plot_reward_live():
         ax1.autoscale_view()
         ax2.relim()
         ax2.autoscale_view()
+
+        cam_view.set_data(cam.capture_image())
+
         plt.draw()
         plt.pause(.001)
 
     plt.show()
 
+def save_statistics():
+    a = np.array([1, 2, 3, 4, 5])
+    b = np.array([11, 12, 13, 14, 15])
+
+    c = np.dstack((a, b))
+    c = c.reshape(c.shape[1:])
+    print(c.shape)
+
+    # time.strftime("%Y%m%d-%H%M%S")
+    np.savetxt("test.csv", c, header=("steps", "reward"))
 
 if __name__ == "__main__":
     # save_array()
-
     # load_array()
 
     # save_model()
@@ -166,3 +184,5 @@ if __name__ == "__main__":
     #stream_webcam()
 
     plot_reward_live()
+
+    #save_statistics()

@@ -48,5 +48,7 @@ if __name__ == "__main__":
         if loop.has_touched_wire() != status:
             status = not status
             print(status)
+        else:
+            print('...')
 
         time.sleep(.5)

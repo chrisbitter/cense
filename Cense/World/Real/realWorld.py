@@ -5,6 +5,7 @@ from Cense.World.Loop.loop import Loop
 import math
 import numpy as np
 import logging
+import time
 
 
 class TerminalStateError(Exception):
@@ -13,24 +14,27 @@ class TerminalStateError(Exception):
 
 
 class RealWorld(object):
-    Y_DISENGAGED = -.185
+    Y_DISENGAGED = -.135
     Y_ENGAGED = -.215
 
     START_POSE = np.array([.345, Y_ENGAGED, .482, 0, math.pi/2, 0])
-    GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, math.pi/2, 0])
 
-    CHECKPOINT_DISTANCE = .04
-    DISTANCE_THRESHOLD = .02
+    CURRENT_START_POSE = START_POSE
+    GOAL_X = -.215
+    #GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, math.pi/2, 0])
 
-    PUNISHMENT_ILLEGAL_POSE = -100
-    PUNISHMENT_WIRE = -50
-    PUNISHMENT_OLD_CHECKPOINT = -30
-    REWARD_GOAL = 100
-    REWARD_NEW_CHECKPOINT = 100
-    REWARD_GENERIC = -1
+    CHECKPOINT_DISTANCE = .03
+    DISTANCE_THRESHOLD = .015
 
-    STATE_DIMENSIONS = (50, 50)
-    ACTIONS = 6
+    PUNISHMENT_ILLEGAL_POSE = -1
+    PUNISHMENT_WIRE = -1
+    PUNISHMENT_OLD_CHECKPOINT = -.5
+    REWARD_GOAL = 1
+    REWARD_NEW_CHECKPOINT = 1
+    REWARD_GENERIC = -.01
+
+    STATE_DIMENSIONS = (40, 40)
+    ACTIONS = 5
 
     __checkpoints = []
 
@@ -44,7 +48,7 @@ class RealWorld(object):
 
     def __init__(self):
         self.controller = RTDE_Controller()
-        self.camera = Camera()
+        self.camera = Camera(self.STATE_DIMENSIONS)
         self.loop = Loop()
 
     def execute(self, action, force=False):
@@ -55,6 +59,7 @@ class RealWorld(object):
             next_pose = self.controller.current_pose()
 
             # all movements relative to TCP orientation
+            # backwards movement disabled
             if action == 0:
                 # move in positive x
                 next_pose[0] += self.translation_constant * math.cos(next_pose[4])
@@ -63,18 +68,18 @@ class RealWorld(object):
                 # move in negative x
                 next_pose[0] -= self.translation_constant * math.cos(next_pose[4])
                 next_pose[2] += self.translation_constant * math.sin(next_pose[4])
-            elif action == 2:
+            elif action == -1:
                 # move in positive z
                 next_pose[0] += self.translation_constant * math.sin(next_pose[4])
                 next_pose[2] += self.translation_constant * math.cos(next_pose[4])
-            elif action == 3:
+            elif action == 2:
                 # move in negative z
                 next_pose[0] -= self.translation_constant * math.sin(next_pose[4])
                 next_pose[2] -= self.translation_constant * math.cos(next_pose[4])
-            elif action == 4:
+            elif action == 3:
                 # turn positively around y
                 next_pose[4] += self.rotation_constant * math.pi / 180
-            elif action == 5:
+            elif action == 4:
                 # turn negatively around y
                 next_pose[4] -= RealWorld.rotation_constant * math.pi / 180
             else:
@@ -126,7 +131,7 @@ class RealWorld(object):
 
     def is_at_goal(self):
         current_pose = self.controller.current_pose()
-        return np.linalg.norm(current_pose[:3] - self.GOAL_POSE[:3]) < self.DISTANCE_THRESHOLD
+        return current_pose[0] < self.GOAL_X
 
     def is_at_old_checkpoint(self):
         if len(self.__checkpoints) > 1:
@@ -172,18 +177,26 @@ class RealWorld(object):
 
     def init_nonterminal_state(self):
         terminal = True
-        print("last: ", self.last_action)
+
         while terminal:
             if self.last_action is not None:
-                if self.last_action % 2:
-                    reversed_action = self.last_action - 1
+                if self.last_action == 0:
+                    reversed_action = 1
+                elif self.last_action == 1:
+                    reversed_action = 0
+                elif self.last_action == 2:
+                    reversed_action = -1
+                elif self.last_action == 3:
+                    reversed_action = 4
                 else:
-                    reversed_action = self.last_action + 1
-                print("execute: ", reversed_action)
+                    reversed_action = 3
+
                 self.execute(reversed_action, force=True)
-                terminal = self.loop.has_touched_wire()
+                self.loop.touched_wire = False
+                time.sleep(.2)
+                terminal = self.in_terminal_state()
                 self.last_action = None
-                print("terminal: ", terminal)
+
             else:
                 self.reset()
                 # Trust that reset leads to nonterminal state
@@ -195,17 +208,24 @@ class RealWorld(object):
 
         # first undo last step before decoupling
         if self.last_action is not None:
-            if self.last_action % 2:
-                reversed_action = self.last_action - 1
-            else:
-                reversed_action = self.last_action + 1
+            if self.last_action == 0:
+                reversed_action = 1
+            elif self.last_action == 1:
+                reversed_action = 0
+            elif self.last_action == 2:
+                reversed_action = -1
+            elif self.last_action == 3:
+                reversed_action = 4
+            elif self.last_action == 4:
+                reversed_action = 3
+
             self.execute(reversed_action, force=True)
 
         pose = self.controller.current_pose()
         pose[1] = self.Y_DISENGAGED
         self.controller.move_to_pose(pose)
 
-        pose = self.START_POSE
+        pose = self.CURRENT_START_POSE
         pose[1] = self.Y_DISENGAGED
         self.controller.move_to_pose(pose)
 
@@ -216,7 +236,18 @@ class RealWorld(object):
         pose[1] = self.Y_ENGAGED
         self.controller.move_to_pose(pose)
 
-        self.__checkpoints = [self.START_POSE[:3]]
+        self.__checkpoints = [self.CURRENT_START_POSE[:3]]
+
+    def update_current_start_pose(self):
+        self.loop.touched_wire = False
+        time.sleep(.2)
+        if not self.in_terminal_state():
+            self.CURRENT_START_POSE = self.controller.current_pose()
+        else:
+            print("Something went wrong. Keeping old start pose")
+
+    def reset_current_start_pose(self):
+        self.CURRENT_START_POSE = self.START_POSE
 
     def test_movement(self):
         input("Test Movement")
@@ -257,4 +288,7 @@ if __name__ == "__main__":
     world = RealWorld()
 
     world.reset()
+
+    #world.execute(2)
+
     print("done")

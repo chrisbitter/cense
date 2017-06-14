@@ -1,6 +1,10 @@
 {
-  "do_train": 0,
+  "do_train": 1,
   "use_old_model": 1,
-  "exploration_probability": 0.2,
-  "runs_before_update": 10
+  "exploration_probability_start": 1,
+  "exploration_probability_end": 0.1,
+  "exploration_probability_update_steps": 1,
+  "exploration_probability_update_factor": 0.994,
+  "runs_before_update": 10,
+  "runs_before_test": 30
 }

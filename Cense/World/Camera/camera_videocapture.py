@@ -13,7 +13,7 @@ class Camera(object):
     __camera = None
     SIZE = None
 
-    def __init__(self, size=(50, 50)):
+    def __init__(self, size):
 
         self.__camera = Device(1)
 
@@ -31,7 +31,7 @@ class Camera(object):
         rgb = np.array(frame.getdata(),
                          np.uint8).reshape(frame.size[1], frame.size[0], 3)
 
-        rgb_cropped = rgb[180:,200:500,:]
+        rgb_cropped = rgb[330:,200:500,:]
 
         # convert to gray image
         gray = np.dot(rgb_cropped[..., :3], [.299, .587, .114])
@@ -39,7 +39,7 @@ class Camera(object):
         #gray = gray[200:][200:]
         # rescale image
         # state = gray
-        state = imresize(gray, self.SIZE)
+        state = imresize(gray, self.SIZE) / 255
 
         return state
 
@@ -59,7 +59,7 @@ class Camera(object):
 
         print(rgb.shape)
 
-        rgb_cropped = rgb[180:,200:500,:]
+        rgb_cropped = rgb[330:,300:500,:]
 
         print(rgb_cropped.shape)
 
@@ -75,7 +75,7 @@ class Camera(object):
         #gray = gray[200:][200:]
         # rescale image
         # state = gray
-        state = imresize(gray, self.SIZE)
+        state = imresize(gray, self.SIZE) / 255
 
         plt.subplot(224)
         plt.imshow(state, cmap='gray')
@@ -127,6 +127,7 @@ def test_1():
 
 
 if __name__ == '__main__':
-    cam = Camera((50, 50))
+    cam = Camera((40, 40))
     cam.calibrate_camera()
+    #cam.capture_image()
     cam.shutdown()

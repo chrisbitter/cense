@@ -45,6 +45,7 @@ class GPU_Trainer(object):
         self.model_weights_remote = config["remote_data_root"] + config["model_weights_remote"]
 
         self.script_remote = config["remote_data_root"] + config["script_remote"]
+        self.test_script_remote = config["remote_data_root"] + config["test_script_remote"]
 
         #todo test if configs are correct -> connect to gpu etc.
 
@@ -155,3 +156,55 @@ class GPU_Trainer(object):
             [print(err) for err in stderr.readlines()]
 
         ssh.close()
+
+    def test_on_gpu(self):
+        print("test on gpu")
+        if self.test_script_remote is None:
+            print("test_script_remote missing!")
+            return None
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(
+            paramiko.AutoAddPolicy())
+
+        ssh.connect(self.host, self.port, self.username, self.password)
+
+        command = "python " + self.test_script_remote
+        stdin, stdout, stderr = ssh.exec_command(command)
+
+        exit_status = stdout.channel.recv_exit_status()
+
+        if exit_status == 0:
+            print("Training on gpu done")
+        else:
+            print("Error: ", exit_status)
+            [print(err) for err in stderr.readlines()]
+
+        print(stdout.read())
+
+        ssh.close()
+
+if __name__ == "__main__":
+
+    gpu = GPU_Trainer(os.path.join(os.getcwd(), "..", "..", ""))
+
+    import Cense.NeuralNetworkFactory.nnFactory as Factory
+    import numpy as np
+
+    model = Factory.model_simple_conv((50,50), 6)
+    print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+
+    model.save_weights(gpu.model_weights_local)
+    gpu.send_model_to_gpu()
+
+    gpu.test_on_gpu()
+
+    gpu.fetch_model_weights_from_gpu()
+
+    model.load_weights(gpu.model_weights_local)
+
+    print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+
+    print("done")
+
+

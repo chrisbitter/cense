@@ -34,7 +34,7 @@ class RTDE_Controller:
     -.185
     Y_ENGAGED = -.215
     CONSTRAINT_MIN = np.array([-.23, -.235, 0.35])
-    CONSTRAINT_MAX = np.array([.36, -.16, 0.85])
+    CONSTRAINT_MAX = np.array([.36, -.13, 0.85])
 
     connection = None
 
@@ -106,6 +106,10 @@ class RTDE_Controller:
 
     # current_position gives the current position of the TCP relative to the defined Cartesian plane in list format
     def current_pose(self):
+
+        #if move_to_pose was called
+        time.sleep(.1)
+
         # Checks for the state of the connection
         # wait until robot finishes move
         while True:
