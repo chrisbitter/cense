@@ -10,6 +10,7 @@ from Cense.World.Real.realWorld import RealWorld as World
 from Cense.World.Real.realWorld import TerminalStateError
 
 import Cense.NeuralNetworkFactory.nnFactory as Factory
+from Cense.Visualization.visualization import training_visualization
 import time
 import numpy as np
 import os
@@ -25,16 +26,13 @@ class DeepQNetworkAgent(object):
     model_file = "../../Resources/nn-data/model.json"
     weights_file = "../../Resources/nn-data/weights.h5"
     train_parameters = "../../Resources/train_parameters.json"
-    # image_path = ""
-    original_epsilon = 0
-    epsilon = 0
-    gamma = 0
-    # lookup_file = ""
 
     experienceBuffer = None
     lock_buffer = threading.Lock()
 
     working_collectors = 0
+
+    vis = None
 
     def __init__(self):
 
@@ -46,11 +44,11 @@ class DeepQNetworkAgent(object):
         with open(self.train_parameters) as json_data:
             config = json.load(json_data)
 
-        self.model = Factory.model_dueling(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
+        self.model = Factory.model_dueling_keras(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
 
         # if there's already a model, use it. Else create new model
         if config["use_old_model"] and os.path.isfile(self.weights_file):
-            #with open(self.model_file) as file:
+            # with open(self.model_file) as file:
             #    model_config = file.readline()
             #    self.model = model_from_json(model_config)
             self.model.load_weights(self.weights_file)
@@ -65,6 +63,8 @@ class DeepQNetworkAgent(object):
 
         self.trainer.send_model_to_gpu()
 
+        self.vis = training_visualization(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
+
     def train(self):
 
         with open(self.train_parameters) as json_data:
@@ -76,45 +76,9 @@ class DeepQNetworkAgent(object):
         print("Train with exploration probability ", exploration_probability, "and updates after", runs_before_update,
               "runs")
 
-        states = []
-        actions = []
-        rewards = []
-        suc_states = []
-        terminals = []
 
         # statistics
-        # runs = []
         run_number = 1
-
-        # steps per run
-        plt.subplot(231)
-        plt.xlabel('run')
-        plt.title('steps')
-        steps_plot, = plt.plot([], [])
-        steps_ax = plt.gca()
-
-        plt.subplot(232)
-        plt.xlabel('run')
-        plt.title('reward')
-        rewards_plot, = plt.plot([], [])
-        rewards_ax = plt.gca()
-
-        plt.subplot(233)
-        plt.xlabel('action')
-        plt.ylabel('q-value')
-        # plt.bar
-        bar_plot = plt.bar(list(range(self.world.ACTIONS)), np.zeros(self.world.ACTIONS))
-        bar_ax = plt.gca()
-
-        plt.subplot(234)
-        plt.xlabel('run')
-        plt.title('exploration probability')
-        exploration_plot, = plt.plot([], [])
-        exploration_ax = plt.gca()
-
-        plt.subplot(235)
-        cam_view = plt.imshow(np.zeros(self.world.STATE_DIMENSIONS), cmap='gray')
-        cam_view.norm.vmax = 1
 
         while True:
 
@@ -125,90 +89,22 @@ class DeepQNetworkAgent(object):
             if not config["do_train"]:
                 break
 
-            # statistics
-            run_reward = 0
-            run_steps = 0
-
-            self.world.init_nonterminal_state()
-
-            state, terminal = self.world.observe_state(), self.world.in_terminal_state()
-
-            while not terminal:
-
-                q_values = self.model.predict(np.expand_dims(state, axis=0))
-
-                if np.any(np.isnan(q_values)):
-                    raise ValueError("Net is broken!")
-
-                for rect, q_val in zip(bar_plot, q_values[0]):
-                    rect.set_height(q_val)
-                    rect.set_color('b')
-
-                # explore with exploration_probability, else exploit
-                if np.random.random() < exploration_probability:
-                    action = np.random.randint(self.world.ACTIONS)
-                else:
-                    action = np.argmax(q_values)
-
-                if action == np.argmax(q_values):
-                    bar_plot[action].set_color('g')
-                else:
-                    bar_plot[action].set_color('r')
-                bar_ax.relim()
-                bar_ax.autoscale_view()
-
-                cam_view.set_data(state)
-                plt.draw()
-                plt.pause(.001)
-
-                try:
-                    suc_state, reward, terminal = self.world.execute(action)
-
-                    states.append(state)
-                    actions.append(action)
-                    rewards.append(reward)
-                    suc_states.append(suc_state)
-                    terminals.append(terminal)
-
-                    state = suc_state
-
-                    # collect stats
-                    run_steps += 1
-                    run_reward += reward
-
-                except TerminalStateError as e:
-                    # apperantly the last action already resulted in touching the wire which wasn't caught
-                    print("Already in Terminal State.")
-                    if len(states):
-                        # correct collected experience, since last action led to terminal state
-                        rewards[-1] = e.args[1]
-                        terminals[-1] = True
-
-                        # replace last reward with reward proposed by exception
-                        run_reward -= reward
-                        run_reward += e.args[1]
-                    break
+            new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(exploration_probability)
 
             if run_steps:
+                [states.append(s) for s in new_states]
+                [actions.append(a) for a in new_actions]
+                [rewards.append(r) for r in new_rewards]
+                [suc_states.append(s) for s in new_suc_states]
+                [terminals.append(t) for t in new_terminals]
+
                 print("Run: ", run_number, "\n\t", "steps:", run_steps, "\n\t", "reward:", run_reward)
 
                 # plot statistics
-                steps_plot.set_xdata(np.append(steps_plot.get_xdata(), [run_number]))
-                steps_plot.set_ydata(np.append(steps_plot.get_ydata(), [run_steps]))
-                rewards_plot.set_xdata(np.append(rewards_plot.get_xdata(), [run_number]))
-                rewards_plot.set_ydata(np.append(rewards_plot.get_ydata(), [run_reward]))
-                exploration_plot.set_xdata(np.append(exploration_plot.get_xdata(), [run_number]))
-                exploration_plot.set_ydata(np.append(exploration_plot.get_ydata(), [exploration_probability]))
-
-                steps_ax.relim()
-                steps_ax.autoscale_view()
-                rewards_ax.relim()
-                rewards_ax.autoscale_view()
-                exploration_ax.relim()
-                exploration_ax.autoscale_view()
-
-                plt.draw()
-                plt.pause(.001)
+                self.vis.update_step_graph(run_number, run_steps)
+                self.vis.update_reward_graph(run_number, run_reward)
+                self.vis.update_exploration_graph()
+                self.vis.draw()
 
                 # train neural network after collecting some experience
                 if run_number % runs_before_update == 0:
@@ -234,60 +130,20 @@ class DeepQNetworkAgent(object):
                         exploration_probability * config["exploration_probability_update_factor"],
                         config["exploration_probability_end"])
 
-                if run_number % config["runs_before_test"] == 0:
-                    print("Show progress!")
+                # try how far we get with the current model.
+                # take last stable state as new starting point
+                if run_number % config["runs_before_advancing_start"] == 0:
+                    print("Try advancing Start Position!")
                     self.world.reset()
 
-                    state, terminal = self.world.observe_state(), self.world.in_terminal_state()
-                    run_steps = 0
-                    run_reward = 0
+                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(0)
 
-                    # run until terminal state is reached/wire is touched
-                    while not terminal:
-
-                        q_values = self.model.predict(np.expand_dims(state, axis=0))
-
-                        if np.any(np.isnan(q_values)):
-                            raise ValueError("Net is broken!")
-
-                        for rect, q_val in zip(bar_plot, q_values[0]):
-                            rect.set_height(q_val)
-                            rect.set_color('y')
-
-                        action = np.argmax(q_values)
-
-                        bar_plot[action].set_color('g')
-                        bar_ax.relim()
-                        bar_ax.autoscale_view()
-
-                        cam_view.set_data(state)
-                        plt.draw()
-                        plt.pause(.001)
-
-                        try:
-
-                            suc_state, reward, terminal = self.world.execute(action)
-
-                            states.append(state)
-                            actions.append(action)
-                            rewards.append(reward)
-                            suc_states.append(suc_state)
-                            terminals.append(terminal)
-
-                            state = suc_state
-
-                            # collect stats
-                            run_steps += 1
-                            run_reward += reward
-
-                        except TerminalStateError as e:
-                            # apperantly the last action already resulted in touching the wire which wasn't caught
-                            print("Already in Terminal State.")
-
-                            # replace last reward with reward proposed by exception
-                            run_reward -= reward
-                            run_reward += e.args[1]
-                            break
+                    if run_steps:
+                        [states.append(s) for s in new_states]
+                        [actions.append(a) for a in new_actions]
+                        [rewards.append(r) for r in new_rewards]
+                        [suc_states.append(s) for s in new_suc_states]
+                        [terminals.append(t) for t in new_terminals]
 
                     if self.world.is_at_goal():
                         self.world.reset_current_start_pose()
@@ -298,19 +154,114 @@ class DeepQNetworkAgent(object):
                         self.world.update_current_start_pose()
 
                     print("\tAchieved reward", run_reward, "in", run_steps, "steps!")
-                    print("Continuing with learning")
+
+                # reset to start pose and see how far we get
+                # if we don't get better at this, we might consider measures like resetting to the last network
+                # that worked best or boosting exploration
+                if run_number % config["runs_before_testing_from_start"] == 0:
+                    print("Try from Start Position!")
+
+                    # reset to start
+                    self.world.reset_current_start_pose()
+                    self.world.reset()
+
+                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(0)
+
+                    if run_steps:
+                        [states.append(s) for s in new_states]
+                        [actions.append(a) for a in new_actions]
+                        [rewards.append(r) for r in new_rewards]
+                        [suc_states.append(s) for s in new_suc_states]
+                        [terminals.append(t) for t in new_terminals]
+
+                    if self.world.is_at_goal():
+                        self.world.reset_current_start_pose()
+                    else:
+                        # ideally, this only reverses the last move and restores the last nonterminal state
+                        # if not, we're back to the old start pose
+                        self.world.init_nonterminal_state()
+                        self.world.update_current_start_pose()
+
+                    print("\tAchieved reward", run_reward, "in", run_steps, "steps!")
 
                 run_number += 1
 
         print("Stop training")
 
-        statistics = np.dstack((steps_plot.get_ydata(), rewards_plot.get_ydata()))
+        statistics = np.dstack((vis.get_steps(), vis.get_rewards()))
 
         statistics = statistics.reshape(statistics.shape[1:])
 
         np.savetxt(time.strftime("%Y%m%d-%H%M%S") + ".csv", statistics, header="steps,reward")
 
         plt.show()
+
+    def run_until_terminal(self, exploration_probability):
+
+        states = []
+        actions = []
+        rewards = []
+        suc_states = []
+        terminals = []
+
+        # statistics
+        run_reward = 0
+        run_steps = 0
+
+        self.world.init_nonterminal_state()
+
+        state, terminal = self.world.observe_state(), self.world.in_terminal_state()
+
+        while not terminal:
+
+            q_values = self.model.predict(np.expand_dims(state, axis=0))
+
+            if np.any(np.isnan(q_values)):
+                raise ValueError("Net is broken!")
+
+            # explore with exploration_probability, else exploit
+            if np.random.random() < exploration_probability:
+                action = np.random.randint(self.world.ACTIONS)
+            else:
+                action = np.argmax(q_values)
+
+            if action == np.argmax(q_values):
+                self.vis.update_qvalue_graph(q_values, action, 'b', 'g')
+            else:
+                self.vis.update_qvalue_graph(q_values, action, 'b', 'r')
+
+            self.vis.update_state_view(state)
+            self.vis.draw()
+
+            try:
+                suc_state, reward, terminal = self.world.execute(action)
+
+                states.append(state)
+                actions.append(action)
+                rewards.append(reward)
+                suc_states.append(suc_state)
+                terminals.append(terminal)
+
+                state = suc_state
+
+                # collect stats
+                run_steps += 1
+                run_reward += reward
+
+            except TerminalStateError as e:
+                # apperantly the last action already resulted in touching the wire which wasn't caught
+                print("Already in Terminal State.")
+                if run_steps:
+                    # correct collected experience, since last action led to terminal state
+                    rewards[-1] = e.args[1]
+                    terminals[-1] = True
+
+                    # replace last reward with reward proposed by exception
+                    run_reward -= reward
+                    run_reward += e.args[1]
+                break
+
+        return states, actions, rewards, suc_states, terminals, run_steps, run_reward
 
 
 if __name__ == '__main__':

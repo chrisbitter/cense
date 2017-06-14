@@ -1,10 +1,14 @@
 import numpy as np
 import h5py
-#import Cense.NeuralNetworkFactory.nnFactory as factory
+# import Cense.NeuralNetworkFactory.nnFactory as factory
 from Cense.World.Camera.camera_videocapture import Camera
 import matplotlib.pyplot as plt
 import time
 from pyfirmata import Arduino, util
+import Cense.NeuralNetworkFactory.nnFactory as factory
+import tensorflow as tf
+import os
+
 
 def save_array():
     states = []
@@ -81,6 +85,7 @@ def read_arduino():
             else:
                 board.digital[13].write(0)
 
+
 def stream_webcam():
     cam = Camera()
 
@@ -97,8 +102,8 @@ def stream_webcam():
         plt.pause(.001)
         print("done")
 
-def plot_reward_live():
 
+def plot_reward_live():
     cam = Camera()
 
     plt.subplot(221)
@@ -115,7 +120,7 @@ def plot_reward_live():
     plt.xlabel('action')
     plt.ylabel('q-value')
     # plt.bar
-    q_values = [-4,-2,-1,-2,-4,-1]
+    q_values = [-4, -2, -1, -2, -4, -1]
     bar_plot = plt.bar(list(range(6)), q_values)
     bar_ax = plt.gca()
 
@@ -124,16 +129,16 @@ def plot_reward_live():
     cam_view.norm.vmax = 1
 
     for i in range(50):
-        x = [.1*i]
+        x = [.1 * i]
         y1 = [np.sin(x)]
         y2 = [np.cos(x)]
 
-        q_values = [x*1.5 for x in q_values]
+        q_values = [x * 1.5 for x in q_values]
 
         for rect, q_val in zip(bar_plot, q_values):
             rect.set_height(q_val)
 
-        #bar_ax.set_ylim(np.min(q_values), np.max(q_values))
+        # bar_ax.set_ylim(np.min(q_values), np.max(q_values))
         bar_ax.relim()
         bar_ax.autoscale_view()
 
@@ -153,6 +158,7 @@ def plot_reward_live():
 
     plt.show()
 
+
 def save_statistics():
     a = np.array([1, 2, 3, 4, 5])
     b = np.array([11, 12, 13, 14, 15])
@@ -164,25 +170,138 @@ def save_statistics():
     # time.strftime("%Y%m%d-%H%M%S")
     np.savetxt("test.csv", c, header=("steps", "reward"))
 
+
+def updateTargetGraph(tfVars, tau):
+    total_vars = len(tfVars)
+    op_holder = []
+    for idx, var in enumerate(tfVars[0:total_vars // 2]):
+        op_holder.append(tfVars[idx + total_vars // 2].assign(
+            (var.value() * tau) + ((1 - tau) * tfVars[idx + total_vars // 2].value())))
+    return op_holder
+
+
+def updateTarget(op_holder, sess):
+    for op in op_holder:
+        sess.run(op)
+
+
+def train_tf_nn():
+    tau = .001
+
+    prediction_network = factory.QNetwork([40, 40], 5)
+    target_network = factory.QNetwork([40, 40], 5)
+
+    init = tf.global_variables_initializer()
+    saver = tf.train.Saver()
+
+    trainables = tf.trainable_variables()
+
+    targetOps = updateTargetGraph(trainables, tau)
+
+    with tf.Session() as sess:
+        sess.run(init)
+
+        for _ in range(100):
+            states = np.random.rand(1, 40, 40)
+
+            q_target = np.random.rand(1, 5)
+            actions = np.random.randint(6, size=(1))
+
+            sess.run(prediction_network.updateModel,
+                     feed_dict={prediction_network.state: states, prediction_network.keep_prob: .5,
+                                prediction_network.targetQ: q_target,
+                                prediction_network.actions: actions})
+
+        updateTarget(targetOps, sess)
+
+        # print(states)
+        states = np.random.rand(1, 40, 40)
+
+        Q1 = prediction_network.Qout.eval(feed_dict={prediction_network.state: states, prediction_network.keep_prob: 1})
+        Q2 = target_network.Qout.eval(feed_dict={target_network.state: states, target_network.keep_prob: 1})
+
+        print(Q1)
+        print(Q2)
+
+        pred_action = prediction_network.predict.eval(
+            feed_dict={prediction_network.state: states, prediction_network.keep_prob: .5})
+        print(pred_action)
+
+        tf.train.write_graph(sess.graph, os.path.join(os.getcwd(), 'my-model'), 'train.pbtxt', )
+
+        #saver.save(sess, os.path.join(os.getcwd(), 'my-model'), global_step=0)
+        #saver.save(sess, os.path.join(os.getcwd(), 'my-model'), global_step=5)
+        #saver.save(sess, os.path.join(os.getcwd(), 'my-model'), global_step=10)
+
+
+def restore_model():
+    sess = tf.Session()
+    # First let's load meta graph and restore weights
+    saver = tf.train.import_meta_graph('my_test_model-0.meta')
+    saver.restore(sess, tf.train.latest_checkpoint('./'))
+
+def button():
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.widgets import Button
+
+    freqs = np.arange(2, 20, 3)
+
+    fig, ax = plt.subplots()
+    plt.subplots_adjust(bottom=0.2)
+    t = np.arange(0.0, 1.0, 0.001)
+    s = np.sin(2 * np.pi * freqs[0] * t)
+    l, = plt.plot(t, s, lw=2)
+
+    class Index(object):
+        ind = 0
+
+        def next(self, event):
+            self.ind += 1
+            i = self.ind % len(freqs)
+            ydata = np.sin(2 * np.pi * freqs[i] * t)
+            l.set_ydata(ydata)
+            plt.draw()
+
+        def prev(self, event):
+            self.ind -= 1
+            i = self.ind % len(freqs)
+            ydata = np.sin(2 * np.pi * freqs[i] * t)
+            l.set_ydata(ydata)
+            plt.draw()
+
+    callback = Index()
+    axprev = plt.axes([0.0, 0.05, 0.1, 0.075])
+    axnext = plt.axes([0.11, 0.05, 0.1, 0.075])
+    bnext = Button(axnext, 'Next')
+    bnext.on_clicked(callback.next)
+    bprev = Button(axprev, 'Previous')
+    bprev.on_clicked(callback.prev)
+
+    plt.show()
+
 if __name__ == "__main__":
     # save_array()
     # load_array()
 
     # save_model()
-    #import csv
+    # import csv
 
-    #a = [[np.random.random()*10 for _ in range(r+5)] for r in range(10)]
+    # a = [[np.random.random()*10 for _ in range(r+5)] for r in range(10)]
 
-    #with open("output.csv", "w") as f:
+    # with open("output.csv", "w") as f:
     #    writer = csv.writer(f)
     #    writer.writerows(a)
 
-    #print(np.random.random_integers(0,50,5))
+    # print(np.random.random_integers(0,50,5))
 
-    #read_arduino()
+    # read_arduino()
 
-    #stream_webcam()
+    # stream_webcam()
 
-    plot_reward_live()
+    # plot_reward_live()
 
-    #save_statistics()
+    # save_statistics()
+
+    # train_tf_nn()
+    button()

@@ -44,18 +44,76 @@ def model_simple_conv(input_shape, output_dim):
 
     return model
 
+class QNetwork():
+    def __init__(self, input_dimensions, num_actions):
+        # input assumed to be quadratic
+        self.state = tf.placeholder(tf.float32, shape=[None, input_dimensions[0], input_dimensions[1]])
+
+        self.state_reshaped = tf.reshape(self.state, [-1, input_dimensions[0], input_dimensions[1], 1])
+
+        self.keep_prob = tf.placeholder(tf.float32)
+
+        self.W_conv1 = weight_variable([5, 5, 1, 32])
+        self.b_conv1 = bias_variable([32])
+        self.h_conv1 = tf.nn.relu(conv2d(self.state_reshaped, self.W_conv1) + self.b_conv1)
+        self.h_pool1 = max_pool_2x2(self.h_conv1)
+
+        self.W_conv2 = weight_variable([5, 5, 32, 64])
+        self.b_conv2 = bias_variable([64])
+        self.h_conv2 = tf.nn.relu(conv2d(self.h_pool1, self.W_conv2) + self.b_conv2)
+        self.h_pool2 = max_pool_2x2(self.h_conv2)
+
+        self.h_pool2_flat = tf.reshape(self.h_pool2, [-1, 10 * 10 * 64])
+
+        # advantage
+        self.W_fc_adv_1 = weight_variable([10 * 10 * 64, 250])
+        self.b_fc_adv_1 = bias_variable([250])
+        self.h_fc_adv_1 = tf.nn.relu(tf.matmul(self.h_pool2_flat, self.W_fc_adv_1) + self.b_fc_adv_1)
+        self.h_fc_adv_1_drop = tf.nn.dropout(self.h_fc_adv_1, self.keep_prob)
+
+        self.W_fc_adv_2 = weight_variable([250, num_actions])
+        self.b_fc_adv_2 = bias_variable([num_actions])
+        self.h_fc_adv_2 = tf.nn.tanh(tf.matmul(self.h_fc_adv_1_drop, self.W_fc_adv_2) + self.b_fc_adv_2)
+        self.h_fc_adv_2_drop = tf.nn.dropout(self.h_fc_adv_2, self.keep_prob)
+
+        # value
+        self.W_fc_val_1 = weight_variable([10 * 10 * 64, 250])
+        self.b_fc_val_1 = bias_variable([250])
+        self.h_fc_val_1 = tf.nn.relu(tf.matmul(self.h_pool2_flat, self.W_fc_val_1) + self.b_fc_val_1)
+        self.h_fc_val_1_drop = tf.nn.dropout(self.h_fc_val_1, self.keep_prob)
+
+        self.W_fc_val_2 = weight_variable([250, 1])
+        self.b_fc_val_2 = bias_variable([1])
+        self.h_fc_val_2 = tf.nn.tanh(tf.matmul(self.h_fc_val_1_drop, self.W_fc_val_2) + self.b_fc_val_2)
+        self.h_fc_val_2_drop = tf.nn.dropout(self.h_fc_val_2, self.keep_prob)
+
+        self.Qout = self.h_fc_val_2_drop + tf.subtract(self.h_fc_adv_2_drop, reduce_mean(self.h_fc_adv_2_drop))
+
+        self.predict = tf.argmax(self.Qout, axis=1)
+        self.actions = tf.placeholder(shape=[None], dtype=tf.int32)
+        self.actions_onehot = tf.one_hot(self.actions, num_actions, dtype=tf.float32)
+
+        self.Q = tf.reduce_sum(tf.multiply(self.Qout, self.actions_onehot), axis=1)
+
+        self.targetQ = tf.placeholder(tf.float32, shape=[None,num_actions])
+
+        self.td_error = tf.square(self.targetQ - self.Q)
+        self.loss = tf.reduce_mean(self.td_error)
+
+        self.trainer = tf.train.AdamOptimizer(learning_rate=0.0001)
+        self.updateModel = self.trainer.minimize(self.loss)
 # v1
-def model_dueling(input_side_length, num_outputs):
+def model_dueling(input_dimensions, num_actions):
 
     graph = tf.Graph()
 
     with graph.as_default():
 
         #input assumed to be quadratic
-        x = tf.placeholder(tf.float32, shape=[None, input_side_length, input_side_length])
+        x = tf.placeholder(tf.float32, shape=[None, input_dimensions[0], input_dimensions[1]])
         y_ = tf.placeholder(tf.float32, shape=[None, 5])
 
-        x_image = tf.reshape(x, [-1, input_side_length, input_side_length, 1])
+        x_image = tf.reshape(x, [-1, input_dimensions[0], input_dimensions[1], 1])
 
         keep_prob = tf.placeholder(tf.float32)
 
@@ -77,8 +135,8 @@ def model_dueling(input_side_length, num_outputs):
         h_fc_adv_1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc_adv_1) + b_fc_adv_1)
         h_fc_adv_1_drop = tf.nn.dropout(h_fc_adv_1, keep_prob)
 
-        W_fc_adv_2 = weight_variable([250, num_outputs])
-        b_fc_adv_2 = bias_variable([num_outputs])
+        W_fc_adv_2 = weight_variable([250, num_actions])
+        b_fc_adv_2 = bias_variable([num_actions])
         h_fc_adv_2 = tf.nn.tanh(tf.matmul(h_fc_adv_1_drop, W_fc_adv_2) + b_fc_adv_2)
         h_fc_adv_2_drop = tf.nn.dropout(h_fc_adv_2, keep_prob)
 
@@ -93,8 +151,7 @@ def model_dueling(input_side_length, num_outputs):
         h_fc_val_2 = tf.nn.tanh(tf.matmul(h_fc_val_1_drop, W_fc_val_2) + b_fc_val_2)
         h_fc_val_2_drop = tf.nn.dropout(h_fc_val_2, keep_prob)
 
-
-        y_ = tf.sub(tf.add(h_fc_adv_2_drop, h_fc_val_2_drop), reduce_mean(h_fc_adv_2_drop))
+        y_ = tf.subtract(tf.add(h_fc_adv_2_drop, h_fc_val_2_drop), reduce_mean(h_fc_adv_2_drop))
 
     return graph
 

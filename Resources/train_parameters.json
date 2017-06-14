@@ -6,5 +6,6 @@
   "exploration_probability_update_steps": 1,
   "exploration_probability_update_factor": 0.994,
   "runs_before_update": 10,
-  "runs_before_test": 30
+  "runs_before_advancing_start": 30,
+  "runs_before_testing_from_start": 100
 }
