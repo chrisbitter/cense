@@ -280,6 +280,27 @@ def button():
 
     plt.show()
 
+def write_csv():
+    import csv
+
+    statistics = dict()
+
+    statistics["a"] = [1,2,3]
+    statistics["b"] = [11,12]
+    statistics["c"] = [21,22,23,24,334,252,6,8,546]
+
+    cols = max([len(vals) for vals in statistics.values()])
+
+    for key in statistics.keys():
+        [statistics[key].append('') for _ in range(len(statistics[key]), cols)]
+
+    print(statistics)
+
+    with open('stats.csv', 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(statistics.keys())
+        writer.writerows(zip(*statistics.values()))
+
 if __name__ == "__main__":
     # save_array()
     # load_array()
@@ -304,4 +325,7 @@ if __name__ == "__main__":
     # save_statistics()
 
     # train_tf_nn()
-    button()
+    #button()
+
+    write_csv()
+

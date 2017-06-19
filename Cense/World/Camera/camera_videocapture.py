@@ -4,7 +4,6 @@ import numpy as np
 from scipy.misc import imresize
 import time
 import matplotlib.pyplot as plt
-import matplotlib.image
 
 from VideoCapture import Device
 
@@ -14,9 +13,7 @@ class Camera(object):
     SIZE = None
 
     def __init__(self, size):
-
         self.__camera = Device(1)
-
         self.SIZE = size
 
     def shutdown(self):
@@ -29,37 +26,52 @@ class Camera(object):
 
         # convert to array
         rgb = np.array(frame.getdata(),
-                         np.uint8).reshape(frame.size[1], frame.size[0], 3)
+                       np.uint8).reshape(frame.size[1], frame.size[0], 3)
 
-        rgb_cropped = rgb[330:,200:500,:]
+        rgb_cropped = rgb[100:, 130:500, :]
 
         # convert to gray image
         gray = np.dot(rgb_cropped[..., :3], [.299, .587, .114])
 
-        #gray = gray[200:][200:]
+        # gray = gray[200:][200:]
         # rescale image
         # state = gray
         state = imresize(gray, self.SIZE) / 255
 
         return state
 
+    def capture_color_image(self):
+        # take picture
+        frame = self.__camera.getImage()
+
+        # convert to array
+        rgb = np.array(frame.getdata(),
+                       np.uint8).reshape(frame.size[1], frame.size[0], 3)
+
+        rgb_cropped = rgb[330:, 200:500, :]
+
+        # rescale image and map values to [0,1]
+        state = imresize(rgb_cropped, self.SIZE) / 255
+
+        return state
 
     def calibrate_camera(self):
         # take picture
         frame = self.__camera.getImage()
 
-        plt.figure()
+        plt.figure(0)
 
         # convert to array
         rgb = np.array(frame.getdata(),
-                         np.uint8).reshape(frame.size[1], frame.size[0], 3)
+                       np.uint8).reshape(frame.size[1], frame.size[0], 3)
 
         plt.subplot(221)
         plt.imshow(rgb)
 
         print(rgb.shape)
 
-        rgb_cropped = rgb[330:,300:500,:]
+        rgb_cropped = rgb[100:, 130:500, :]
+        # rgb_cropped = rgb
 
         print(rgb_cropped.shape)
 
@@ -72,7 +84,7 @@ class Camera(object):
         plt.subplot(223)
         plt.imshow(gray, cmap='gray')
 
-        #gray = gray[200:][200:]
+        # gray = gray[200:][200:]
         # rescale image
         # state = gray
         state = imresize(gray, self.SIZE) / 255
@@ -83,6 +95,7 @@ class Camera(object):
         plt.show()
 
         return state
+
 
 def take_picture():
     cam = Camera((50, 50))
@@ -128,6 +141,10 @@ def test_1():
 
 if __name__ == '__main__':
     cam = Camera((40, 40))
-    cam.calibrate_camera()
-    #cam.capture_image()
+
+    # cam.calibrate_camera()
+    state = cam.capture_image()
+    plt.imshow(state, cmap='gray')
+    plt.show()
+
     cam.shutdown()

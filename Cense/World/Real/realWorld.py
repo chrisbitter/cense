@@ -12,12 +12,16 @@ class TerminalStateError(Exception):
     def __init__(self, *args):
         super().__init__(self, *args)
 
+class InsufficientProgressError(Exception):
+    def __init__(self, *args):
+        super().__init__(self, *args)
+
 
 class RealWorld(object):
-    Y_DISENGAGED = -.135
-    Y_ENGAGED = -.215
+    Y_DISENGAGED = -.3
+    Y_ENGAGED = -.35
 
-    START_POSE = np.array([.345, Y_ENGAGED, .482, 0, math.pi/2, 0])
+    START_POSE = np.array([.3, Y_ENGAGED, .448, 0, math.pi/2, 0])
 
     CURRENT_START_POSE = START_POSE
     GOAL_X = -.215
@@ -38,6 +42,9 @@ class RealWorld(object):
 
     __checkpoints = []
 
+    STEP_WATCHDOG = 10
+    CURRENT_STEP_WATCHDOG = 0
+
     translation_constant = .01
     rotation_constant = 30
     camera = None
@@ -47,15 +54,34 @@ class RealWorld(object):
     last_action = None
 
     def __init__(self):
+        logging.debug("Real World - init")
+
         self.controller = RTDE_Controller()
         self.camera = Camera(self.STATE_DIMENSIONS)
         self.loop = Loop()
 
+        self.reset_stepwatchdog()
+
+    def reset_stepwatchdog(self):
+        self.CURRENT_STEP_WATCHDOG = self.STEP_WATCHDOG
+
+    def deactivate(self):
+        self.controller.pause_sync()
+
+    def activate(self):
+        self.controller.start_sync()
+
     def execute(self, action, force=False):
+        logging.debug("Real World - execute")
+
+        if not force:
+            if self.CURRENT_STEP_WATCHDOG == 0:
+                raise InsufficientProgressError
+            else:
+                self.CURRENT_STEP_WATCHDOG -= 1
 
         # only move when state is not terminal
-        if not self.loop.has_touched_wire() or force:
-
+        if not self.in_terminal_state() or force:
             next_pose = self.controller.current_pose()
 
             # all movements relative to TCP orientation
@@ -91,13 +117,16 @@ class RealWorld(object):
                 self.controller.move_to_pose(next_pose)
                 self.last_action = action
 
+                while self.controller.is_moving():
+                    pass
+
                 if self.loop.has_touched_wire():
                     reward = self.PUNISHMENT_WIRE
                     terminal = True
 
-                elif self.is_at_old_checkpoint():
-                    reward = self.PUNISHMENT_OLD_CHECKPOINT
-                    self.regress_checkpoints()
+                #elif self.is_at_old_checkpoint():
+                #    reward = self.PUNISHMENT_OLD_CHECKPOINT
+                #    self.regress_checkpoints()
 
                 elif self.is_at_goal():
                     reward = self.REWARD_GOAL
@@ -106,6 +135,7 @@ class RealWorld(object):
                 elif self.is_at_new_checkpoint():
                     reward = self.REWARD_NEW_CHECKPOINT
                     self.advance_checkpoints()
+                    self.reset_stepwatchdog()
                 else:
                     reward = self.REWARD_GENERIC
 
@@ -117,23 +147,32 @@ class RealWorld(object):
                 terminal = True
                 state = self.observe_state()
 
+
         else:
             raise TerminalStateError(self.PUNISHMENT_WIRE)
 
         return state, reward, terminal
 
     def observe_state(self):
+        logging.debug("Real World - observe_state")
+
         return self.camera.capture_image()
 
     def in_terminal_state(self):
-        return self.loop.has_touched_wire() | \
+        logging.debug("Real World - in_terminal_state")
+
+        return self.loop.is_touching_wire() | \
                self.is_at_goal()
 
     def is_at_goal(self):
+        logging.debug("Real World - is_at_goal")
+
         current_pose = self.controller.current_pose()
         return current_pose[0] < self.GOAL_X
 
     def is_at_old_checkpoint(self):
+        logging.debug("Real World - is_at_old_checkpoint")
+
         if len(self.__checkpoints) > 1:
             current_pose = self.controller.current_pose()
 
@@ -143,13 +182,19 @@ class RealWorld(object):
         return False
 
     def is_at_new_checkpoint(self):
+        logging.debug("Real World - is_at_new_checkpoint")
+
         current_pose = self.controller.current_pose()
         return np.linalg.norm(current_pose[:3] - self.__checkpoints[-1][:3]) > self.CHECKPOINT_DISTANCE
 
     def regress_checkpoints(self):
+        logging.debug("Real World - regress_checkpoints")
+
         self.__checkpoints.pop()
 
     def advance_checkpoints(self):
+        logging.debug("Real World - advance_checkpoints")
+
         current_pose = self.controller.current_pose()
         self.__checkpoints.append(current_pose[:3])
 
@@ -176,6 +221,8 @@ class RealWorld(object):
         self.__checkpoints = [self.START_POSE]
 
     def init_nonterminal_state(self):
+        logging.debug("Real World - init_nonterminal_state")
+
         terminal = True
 
         while terminal:
@@ -192,8 +239,6 @@ class RealWorld(object):
                     reversed_action = 3
 
                 self.execute(reversed_action, force=True)
-                self.loop.touched_wire = False
-                time.sleep(.2)
                 terminal = self.in_terminal_state()
                 self.last_action = None
 
@@ -202,12 +247,15 @@ class RealWorld(object):
                 # Trust that reset leads to nonterminal state
                 terminal = False
 
+        self.reset_stepwatchdog()
+
     def reset(self):
-        logging.debug("RealWorld reset")
-        print("reset")
+        logging.debug("Real World - reset")
 
         # first undo last step before decoupling
         if self.last_action is not None:
+            reversed_action = None
+
             if self.last_action == 0:
                 reversed_action = 1
             elif self.last_action == 1:
@@ -219,7 +267,8 @@ class RealWorld(object):
             elif self.last_action == 4:
                 reversed_action = 3
 
-            self.execute(reversed_action, force=True)
+            if reversed_action is not None:
+                self.execute(reversed_action, force=True)
 
         pose = self.controller.current_pose()
         pose[1] = self.Y_DISENGAGED
@@ -238,7 +287,11 @@ class RealWorld(object):
 
         self.__checkpoints = [self.CURRENT_START_POSE[:3]]
 
+        self.reset_stepwatchdog()
+
     def update_current_start_pose(self):
+        logging.debug("Real World - update_current_start_pose")
+
         self.loop.touched_wire = False
         time.sleep(.2)
         if not self.in_terminal_state():
@@ -247,6 +300,8 @@ class RealWorld(object):
             print("Something went wrong. Keeping old start pose")
 
     def reset_current_start_pose(self):
+        logging.debug("Real World - reset_current_start_pose")
+
         self.CURRENT_START_POSE = self.START_POSE
 
     def test_movement(self):
@@ -290,5 +345,3 @@ if __name__ == "__main__":
     world.reset()
 
     #world.execute(2)
-
-    print("done")

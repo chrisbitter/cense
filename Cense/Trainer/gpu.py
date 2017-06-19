@@ -149,9 +149,7 @@ class GPU_Trainer(object):
 
         exit_status = stdout.channel.recv_exit_status()
 
-        if exit_status == 0:
-            print("Training on gpu done")
-        else:
+        if exit_status != 0:
             print("Error: ", exit_status)
             [print(err) for err in stderr.readlines()]
 
@@ -174,9 +172,7 @@ class GPU_Trainer(object):
 
         exit_status = stdout.channel.recv_exit_status()
 
-        if exit_status == 0:
-            print("Training on gpu done")
-        else:
+        if exit_status != 0:
             print("Error: ", exit_status)
             [print(err) for err in stderr.readlines()]
 

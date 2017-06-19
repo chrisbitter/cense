@@ -221,10 +221,11 @@ class RTDE(object):
         while self.is_connected():
             readable, _, _ = select.select([self.__sock], [], [], DEFAULT_TIMEOUT)
 
+            print(readable)
+
             if len(readable):
                 more = self.__sock.recv(4096)
 
-                # print(more, type(more), sep="    ")
                 if len(more) == 0:
                     self.__trigger_disconnected()
                     return None

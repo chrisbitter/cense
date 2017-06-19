@@ -15,6 +15,7 @@ from operator import sub, abs
 import time
 import numpy as np
 import os
+import threading
 
 class IllegalPoseException(Exception):
     pass
@@ -31,18 +32,20 @@ class RTDE_Controller:
     ERROR = .001
 
     keep_running = True
-    -.185
-    Y_ENGAGED = -.215
-    CONSTRAINT_MIN = np.array([-.23, -.235, 0.35])
-    CONSTRAINT_MAX = np.array([.36, -.13, 0.85])
+
+    CONSTRAINT_MIN = np.array([-.24, -.38, .2])
+    CONSTRAINT_MAX = np.array([.33, -.27, .68])
 
     connection = None
 
     setp = None
 
+    #guarantees, that only one method will execute.
+    #this is needed, because every method pauses synchronization to keep things from messing up
+    lock = threading.Lock()
+
     def __init__(self):
         print("Connecting Robot")
-        logging.getLogger().setLevel(logging.ERROR)
 
         conf = rtde_config.ConfigFile(self.config_filename)
         state_names, state_types = conf.get_recipe('state')
@@ -70,7 +73,6 @@ class RTDE_Controller:
 
         # Send configuration for output and input recipes
         self.connection.send_output_setup(state_names, state_types)
-
         self.setp = self.connection.send_input_setup(setp_names, setp_types)
 
         # Set input registers (double) to 0
@@ -81,7 +83,6 @@ class RTDE_Controller:
         self.setp.input_double_register_4 = 0
         self.setp.input_double_register_5 = 0
 
-        self.connection.send_start()
 
     def __enter__(self):
         return self
@@ -104,57 +105,86 @@ class RTDE_Controller:
     def disconnect_rtde(self):
         self.connection.disconnect()
 
+    def is_moving(self):
+        with self.lock:
+            logging.debug("Controller - is_moving")
+
+            while not self.connection.send_start():
+                started = self.start_sync()
+                time.sleep(.5)
+
+            state = self.connection.receive()
+
+            self.pause_sync()
+
+            return state.__dict__[b'output_int_register_0'] == 1
+
+
     # current_position gives the current position of the TCP relative to the defined Cartesian plane in list format
     def current_pose(self):
+        with self.lock:
+            logging.debug("Controller - current_pose")
 
-        #if move_to_pose was called
-        time.sleep(.1)
+            while not self.connection.send_start():
+                started = self.start_sync()
+                time.sleep(.5)
 
-        # Checks for the state of the connection
-        # wait until robot finishes move
-        while True:
-            state = self.connection.receive()
-            if state.__dict__[b'output_int_register_0'] == 0:
-                break
+            # Checks for the state of the connection
+            # wait until robot finishes move
+            while True:
+                logging.debug("waiting for state")
+                state = self.connection.receive()
+                if state.__dict__[b'output_int_register_0'] == 0:
+                    break
 
-        # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it returns 'Failed'
-        if state is None:
-            return None
+            logging.debug(state)
+            self.pause_sync()
 
-        # If successful it returns the list with the current TCP position
-        return np.array(state.__dict__[b'actual_TCP_pose'])
+            # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it returns 'Failed'
+            if state is None:
+                return None
+
+            # If successful it returns the list with the current TCP position
+            return np.array(state.__dict__[b'actual_TCP_pose'])
 
     # move_to_position changes the position and orientation of the TCP of the robot relative to the defined Cartesian plane
     def move_to_pose(self, new_pose):
-        #print("Move: ", new_pose)
 
-        if new_pose[0] < self.CONSTRAINT_MIN[0] or new_pose[0] > self.CONSTRAINT_MAX[0] \
-                or new_pose[1] < self.CONSTRAINT_MIN[1] or new_pose[1] > self.CONSTRAINT_MAX[1] \
-                or new_pose[2] < self.CONSTRAINT_MIN[2] or new_pose[2] > self.CONSTRAINT_MAX[2]:
-            # print(new_pose)
-            # print(new_pose[0] < self.CONSTRAINT_MIN[0], new_pose[0] > self.CONSTRAINT_MAX[0],
-            #       new_pose[1] < self.CONSTRAINT_MIN[1], new_pose[1] > self.CONSTRAINT_MAX[1],
-            #       new_pose[2] < self.CONSTRAINT_MIN[2], new_pose[2] > self.CONSTRAINT_MAX[2])
-            raise IllegalPoseException
+        with self.lock:
 
-        # Checks for the state of the connection
-        state = self.connection.receive()
+            if new_pose[0] < self.CONSTRAINT_MIN[0] or new_pose[0] > self.CONSTRAINT_MAX[0] \
+                    or new_pose[1] < self.CONSTRAINT_MIN[1] or new_pose[1] > self.CONSTRAINT_MAX[1] \
+                    or new_pose[2] < self.CONSTRAINT_MIN[2] or new_pose[2] > self.CONSTRAINT_MAX[2]:
+                # print(new_pose)
+                # print(new_pose[0] < self.CONSTRAINT_MIN[0], new_pose[0] > self.CONSTRAINT_MAX[0],
+                #       new_pose[1] < self.CONSTRAINT_MIN[1], new_pose[1] > self.CONSTRAINT_MAX[1],
+                #       new_pose[2] < self.CONSTRAINT_MIN[2], new_pose[2] > self.CONSTRAINT_MAX[2])
+                raise IllegalPoseException
 
-        # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it throws an connection error
-        if state is None:
-            raise ConnectionError
+            while not self.connection.send_start():
+                started = self.start_sync()
+                time.sleep(.5)
 
-        # set registers to new pose values
-        for i in range(6):
-            self.setp.__dict__[b"input_double_register_" + str(i).encode()] = new_pose[i]
-
-        #while np.linalg.norm(self.current_pose() - new_pose) > self.ERROR:
-
-        # Send new position
-        self.connection.send(self.setp)
-
-        # wait until robot finishes move
-        while True:
+            # Checks for the state of the connection
             state = self.connection.receive()
-            if state.__dict__[b'output_int_register_0'] == 0:
-                break
+
+            # If output config not initialized, RTDE synchronization is inactive, or RTDE is disconnected it throws an connection error
+            if state is None:
+                raise ConnectionError
+
+            # set registers to new pose values
+            for i in range(6):
+                self.setp.__dict__[b"input_double_register_" + str(i).encode()] = new_pose[i]
+
+            #while np.linalg.norm(self.current_pose() - new_pose) > self.ERROR:
+
+            # Send new position
+            self.connection.send(self.setp)
+
+            # wait until robot finishes move
+            while True:
+                state = self.connection.receive()
+                if state.__dict__[b'output_int_register_0'] == 0:
+                    break
+
+            self.pause_sync()
