@@ -26,6 +26,7 @@ import socket
 import select
 import sys
 import logging
+import Cense.World.Robot.rtde_client.rtde.serialize as serialize
 
 import Cense.World.Robot.rtde_client.rtde.serialize
 

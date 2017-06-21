@@ -108,7 +108,7 @@ class DataObject(object):
             l.append(self.recipe_id)
         for i in range(len(names)):
             if self.__dict__[names[i]] is None:
-                raise ValueError('Uninitialized parameter: ' + names[i])
+                raise ValueError(b'Uninitialized parameter: ' + names[i])
             if types[i].startswith(b'VECTOR'):
                 l.extend(self.__dict__[names[i]])
             else:

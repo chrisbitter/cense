@@ -58,9 +58,5 @@ if __name__ == "__main__":
     loop = Loop()
 
     while True:
-        if not loop.has_touched_wire():
-            print("########")
-        else:
-            print('...')
-
-        input("Enter")
+        print(loop.has_touched_wire())
+        input()

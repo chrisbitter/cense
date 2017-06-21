@@ -16,6 +16,7 @@ import time
 import numpy as np
 import os, stat
 from keras.models import model_from_json
+from threading import Thread, Lock
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -29,9 +30,6 @@ class DeepQNetworkAgent(object):
     train_parameters = "../../Resources/train_parameters.json"
 
     data_storage = "../../Experiment_Data/"
-
-    experienceBuffer = None
-    lock_buffer = threading.Lock()
 
     working_collectors = 0
 
@@ -50,13 +48,16 @@ class DeepQNetworkAgent(object):
         with open(self.train_parameters) as json_data:
             config = json.load(json_data)
 
-        self.exploration_probability_start = config["exploration_probability_start"]
-        self.exploration_probability_end = config["exploration_probability_end"]
-        self.exploration_probability_runs_until_end = config["exploration_probability_runs_until_end"]
-        self.exploration_probability_boost_runs_until_end = config["exploration_probability_boost_runs_until_end"]
-        self.runs_before_update = config["runs_before_update"]
-        self.runs_before_advancing_start = config["runs_before_advancing_start"]
-        self.runs_before_testing_from_start = config["runs_before_testing_from_start"]
+        collector_config = config["collector"]
+
+        self.exploration_probability_start = collector_config["exploration_probability_start"]
+        self.exploration_probability_end = collector_config["exploration_probability_end"]
+        self.exploration_probability_runs_until_end = collector_config["exploration_probability_runs_until_end"]
+        self.exploration_probability_boost_runs_until_end = collector_config[
+            "exploration_probability_boost_runs_until_end"]
+        self.runs_before_update = collector_config["runs_before_update"]
+        self.runs_before_advancing_start = collector_config["runs_before_advancing_start"]
+        self.runs_before_testing_from_start = collector_config["runs_before_testing_from_start"]
 
         self.exploration_probability = self.exploration_probability_start
 
@@ -66,7 +67,7 @@ class DeepQNetworkAgent(object):
         self.model = Factory.model_dueling_keras(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
 
         # if there's already a model, use it. Else create new model
-        if config["use_old_model"] and os.path.isfile(self.weights_file):
+        if collector_config["resume_training"] and os.path.isfile(self.weights_file):
             # with open(self.model_file) as file:
             #    model_config = file.readline()
             #    self.model = model_from_json(model_config)
@@ -78,12 +79,11 @@ class DeepQNetworkAgent(object):
             #    file.write(self.model.to_json())
             self.model.save_weights(self.weights_file)
 
-        self.trainer = GPU_Trainer(project_root_folder)
+        self.trainer = GPU_Trainer(project_root_folder, config["trainer"])
 
         self.trainer.send_model_to_gpu()
 
-        self.vis = TrainingVisualization(self.world.STATE_DIMENSIONS, self.world.ACTIONS, self.boost_exploration,
-                                         self.change_mode, self.stop_training)
+        self.vis = TrainingVisualization(self.world.STATE_DIMENSIONS, self.world.ACTIONS, self.boost_exploration, self.stop_training)
 
         self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
         os.makedirs(self.experiment_directory)
@@ -104,26 +104,24 @@ class DeepQNetworkAgent(object):
         statistics["advancing_rewards"] = []
         statistics["testing_steps"] = []
         statistics["testing_rewards"] = []
+        statistics["successful_network_update"] = []
 
         # statistics
         run_number = 1
+        training_number = 1
 
-        self.pause = True
         self.stop = False
 
         while True:
 
-            while self.pause:
-                if self.stop:
-                    break
-                self.vis.draw()
-                time.sleep(.5)
-
             if self.stop:
                 break
 
-            new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(
-                self.exploration_probability)
+            try:
+                new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(
+                    self.exploration_probability)
+            except TerminalStateError:
+                break
 
             if run_steps:
                 [states.append(s) for s in new_states]
@@ -147,20 +145,25 @@ class DeepQNetworkAgent(object):
 
                 # train neural network after collecting some experience
                 if run_number % self.runs_before_update == 0:
-                    logging.debug("train neural net")
+                    if self.trainer.is_done_training():
 
-                    self.trainer.send_experience_to_gpu(states, actions, rewards, suc_states, terminals)
-                    self.trainer.train_on_gpu()
-                    self.trainer.fetch_model_weights_from_gpu()
+                        statistics["successful_network_update"].append(True)
+                        logging.debug("Replace NN and start new training")
 
-                    self.model.load_weights(self.weights_file)
+                        self.model.load_weights(self.weights_file)
+                        Thread(target=self.trainer.train,
+                               args=(states, actions, rewards, suc_states, terminals)).start()
 
-                    # clear experience collection
-                    states = []
-                    actions = []
-                    rewards = []
-                    suc_states = []
-                    terminals = []
+                        training_number += 1
+
+                        # clear experience collection
+                        states = []
+                        actions = []
+                        rewards = []
+                        suc_states = []
+                        terminals = []
+                    else:
+                        statistics["successful_network_update"].append(False)
 
                 # update exploration probability
                 self.exploration_probability = max(
@@ -173,8 +176,11 @@ class DeepQNetworkAgent(object):
                     print("Advancing Start Position!")
                     self.world.last_action = None
 
-                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(
-                        0)
+                    try:
+                        new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                            self.run_until_terminal(0)
+                    except TerminalStateError:
+                        break
 
                     if run_steps:
                         [states.append(s) for s in new_states]
@@ -187,16 +193,13 @@ class DeepQNetworkAgent(object):
                         statistics["advancing_steps"].append(run_steps)
                         statistics["advancing_rewards"].append(run_reward)
 
-                    #self.world.activate()
                     if self.world.is_at_goal():
                         self.world.reset_current_start_pose()
+                        self.world.reset()
                     else:
-                        # ideally, this only reverses the last move and restores the last non-terminal state
-                        # if not, we're back to the old start pose
-                        self.world.init_nonterminal_state()
                         self.world.update_current_start_pose()
-                    #self.world.deactivate()
-                    print("Advenced start by", run_steps, "steps")
+                    # self.world.deactivate()
+                    print("Advanced start by", run_steps, "steps")
 
                 # reset to start pose and see how far we get
                 # if we don't get better at this, we might consider measures like resetting to the last network
@@ -206,8 +209,11 @@ class DeepQNetworkAgent(object):
                     # reset to start
                     self.world.reset_current_start_pose()
 
-                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(
-                        0)
+                    try:
+                        new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                            self.run_until_terminal(0)
+                    except TerminalStateError:
+                        break
 
                     if run_steps:
                         [states.append(s) for s in new_states]
@@ -222,19 +228,14 @@ class DeepQNetworkAgent(object):
                         model_filename = os.path.join(self.experiment_directory, 'model-test-' + str(run_number))
                         self.model.save_weights(model_filename)
 
-                    #self.world.activate()
                     if self.world.is_at_goal():
                         # once the wire is learned successfully, stop training
                         self.world.reset_current_start_pose()
+                        self.world.reset()
                         print("Successfully completed wire!")
                         self.stop_training()
                     else:
-                        # ideally, this only reverses the last move and restores the last nonterminal state
-                        # if not, we're back to the old start pose
-                        self.world.init_nonterminal_state()
                         self.world.update_current_start_pose()
-
-                    #self.world.deactivate()
 
                     self.vis.update_test_step_graph(run_number, run_steps)
 
@@ -261,9 +262,6 @@ class DeepQNetworkAgent(object):
     def stop_training(self):
         self.stop = True
 
-    def change_mode(self):
-        self.pause = not self.pause
-
     def boost_exploration(self):
         self.exploration_probability = self.exploration_probability_start
 
@@ -282,11 +280,10 @@ class DeepQNetworkAgent(object):
         run_reward = 0
         run_steps = 0
 
-        #self.world.activate()
+        # assumes world to be in nonterminal state, as promised by RealWorld
+        terminal = False
 
-        self.world.init_nonterminal_state()
-
-        state, terminal = self.world.observe_state(), self.world.in_terminal_state()
+        state = self.world.observe_state()
 
         while not terminal:
 
@@ -324,29 +321,27 @@ class DeepQNetworkAgent(object):
                 run_steps += 1
                 run_reward += reward
 
-            except TerminalStateError as e:
-                # apperantly the last action already resulted in touching the wire which wasn't caught
-                print("Already in Terminal State.")
-                if run_steps:
-                    # correct collected experience, since last action led to terminal state
-                    rewards[-1] = e.args[1]
-                    terminals[-1] = True
-
-                    # replace last reward with reward proposed by exception
-                    run_reward -= reward
-                    run_reward += e.args[1]
+            except TerminalStateError:
+                # normally happens, when run starts in terminal state. Try resetting world
+                try:
+                    self.world.reset()
+                except TerminalStateError:
+                    # if reset also throws TerminalStateError, something is seriously wrong! Abort everything
+                    logging.error("Hard reset still leads to Terminal State! Abort training!")
+                    self.stop_training()
+                    raise
                 break
             except InsufficientProgressError:
-                print("Insufficient Progress. Aborting Run.")
+                logging.info("Insufficient Progress. Aborting Run.")
                 break
 
-        #self.world.deactivate()
+        # self.world.deactivate()
 
         return states, actions, rewards, suc_states, terminals, run_steps, run_reward
 
 
 if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
+    # logging.getLogger().setLevel(logging.DEBUG)
 
     agent = DeepQNetworkAgent()
 

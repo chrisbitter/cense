@@ -89,7 +89,7 @@ def model_simple_conv(input_shape, output_dim):
     return model
 
 
-class GPU(object):
+class Training(object):
     experience_buffer = deque()
 
     STATE_DIMENSIONS = (40, 40)
@@ -101,6 +101,7 @@ class GPU(object):
 
     model_file = root_folder + "model/model.json"
     weights_file = root_folder + "model/weights.h5"
+    target_weights_file = root_folder + "model/target_weights.h5"
 
     new_data_folder = root_folder + "data/new_data/"
     data_file = root_folder + "data/data.h5"
@@ -114,28 +115,34 @@ class GPU(object):
     model = None
     target_model = None
 
-    # Load [model config and] weights from files
-    def create_model(self):
+    use_target = False
 
-        # if os.path.isfile(self.model_file):
-        #    with open(self.model_file) as file:
-        #        model_config = file.readline()
-        #        self.model = model_from_json(model_config)
-        #        self.target_model = model_from_json(model_config)
-        # else:
-        #    raise MissingFileException("Missing file: Model")
+    def run(self):
+        # create models
+        with open(self.train_parameters) as json_data:
+            self.config = json.load(json_data)
 
         self.model = model_dueling(self.STATE_DIMENSIONS, self.ACTIONS)
         self.target_model = model_dueling(self.STATE_DIMENSIONS, self.ACTIONS)
 
         if os.path.isfile(self.weights_file):
             self.model.load_weights(self.weights_file)
-            self.target_model.load_weights(self.weights_file)
         else:
             raise MissingFileException("Missing file: Weights")
 
-    # Load data
-    def load_data(self):
+        if self.config["use_target"] and os.path.isfile(self.target_weights_file):
+            self.target_model.load_weights(self.target_weights_file)
+            self.use_target = True
+
+        # Load data
+        # Load old data
+        if os.path.isfile(self.data_file):
+            with h5py.File(self.data_file, 'r') as f:
+                self.states = f['states'][:]
+                self.actions = f['actions'][:]
+                self.rewards = f['rewards'][:]
+                self.suc_states = f['suc_states'][:]
+                self.terminals = f['terminals'][:]
 
         # Load new data
         for new_data_file in os.listdir(self.new_data_folder):
@@ -158,28 +165,10 @@ class GPU(object):
                 # all data will be saved in data.h5, so no need for old data file
                 os.remove(self.new_data_folder + new_data_file)
 
-        # Load old data
-        if os.path.isfile(self.data_file):
-            with h5py.File(self.data_file, 'r') as f:
-                if self.states is None:
-                    self.states = f['states'][:]
-                    self.actions = f['actions'][:]
-                    self.rewards = f['rewards'][:]
-                    self.suc_states = f['suc_states'][:]
-                    self.terminals = f['terminals'][:]
-                else:
-                    self.states = np.concatenate([self.states, f['states'][:]])
-                    self.actions = np.concatenate([self.actions, f['actions'][:]])
-                    self.rewards = np.concatenate([self.rewards, f['rewards'][:]])
-                    self.suc_states = np.concatenate([self.suc_states, f['suc_states'][:]])
-                    self.terminals = np.concatenate([self.terminals, f['terminals'][:]])
-
         if self.states is None or not self.states.size:
             raise MissingFileException("Missing file: No data to process")
 
-    # Save experience data to data.h5 file
-    def save_data(self):
-
+        # Save experience data to data.h5 file
         with h5py.File(self.data_file, 'w') as f:
             f.create_dataset('states', data=self.states)
             f.create_dataset('actions', data=self.actions)
@@ -187,19 +176,13 @@ class GPU(object):
             f.create_dataset('suc_states', data=self.suc_states)
             f.create_dataset('terminals', data=self.terminals)
 
-    def save_model(self):
-        if self.model:
-            self.model.save_weights(self.weights_file)
-
-    def train_model(self):
-
-        with open(self.train_parameters) as json_data:
-            config = json.load(json_data)
-
-        epochs = config["epochs"]
-        batch_size = config["batch_size"]
-        discount_factor = config["discount_factor"]
-        target_update_epochs = config["target_update_epochs"]
+    
+        # training
+    
+        epochs = self.config["epochs"]
+        batch_size = self.config["batch_size"]
+        discount_factor = self.config["discount_factor"]
+        target_update_rate = self.config["target_update_rate"]
 
         if self.model and self.states.size:
             # init experience buffer
@@ -211,11 +194,6 @@ class GPU(object):
             self.model.compile(loss='mean_squared_error', optimizer='sgd')
 
             for epoch in range(epochs):
-                # print("Epoch: ", epoch)
-
-                # clone model to target model
-                if epoch % target_update_epochs == 0:
-                    self.target_model.set_weights(self.model.get_weights())
 
                 # sample a minibatch
                 minibatch = np.random.choice(self.experience_buffer, size=batch_size)
@@ -232,7 +210,10 @@ class GPU(object):
                 batch_rewards = np.array([self.rewards[i] for i in minibatch])  # 30, 1
 
                 # calculate Q-Values of successor states
-                Q_suc = self.target_model.predict(batch_suc_states)
+                if self.use_target:
+                    Q_suc = self.target_model.predict(batch_suc_states)
+                else:
+                    Q_suc = self.model.predict(batch_suc_states)
                 # print("Q-Values for successor states:\n", Q_suc)
                 # get max_Q values, discount them and set set those values to 0 where state is terminal
                 max_Q_suc = np.amax(Q_suc, axis=1) * discount_factor * np.invert(batch_terminals)
@@ -245,26 +226,22 @@ class GPU(object):
 
                 self.model.train_on_batch(states, batch_targets)
 
+                if self.use_target:
+                    # update target network
+                    model_weights = self.model.get_weights()
+                    target_weights = self.target_model.get_weights()
+                    for i in range(len(model_weights)):
+                        target_weights[i] = target_update_rate * model_weights[i] + (1 - target_update_rate) * target_weights[i]
+                    self.target_model.set_weights(target_weights)
+
+        self.model.save_weights(self.weights_file)
+        if self.use_target:
+            self.target_model.save_weights(self.target_weights_file)
 
 if __name__ == "__main__":
 
-    gpu = GPU()
-
     try:
-        gpu.load_data()
-        gpu.save_data()
-
-        # print(gpu.states.shape)
-
-        gpu.create_model()
-
-        gpu.train_model()
-
-        gpu.save_model()
+        Training().run()
 
     except MissingFileException as e:
         print(e.msg)
-
-        # model = create_model(model_file, weights_file)
-
-        # train_model(model, num_episodes=300)

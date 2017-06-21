@@ -2,33 +2,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 import numpy as np
 
-
-class ModeButtonProcessor(object):
-    def __init__(self, axes, label, callback):
-        self.button = Button(axes, label)
-        self.callback = callback
-        self.button.on_clicked(self.process)
-
-    def process(self, event):
-        if self.button.label.get_text() == 'Run':
-            self.button.label.set_text('Pause')
-        else:
-            self.button.label.set_text('Run')
-        self.callback()
-
-
-class ButtonProcessor(object):
-    def __init__(self, axes, label, callback):
-        self.button = Button(axes, label)
-        self.callback = callback
-        self.button.on_clicked(self.process)
-
-    def process(self, event):
-        self.callback()
-
-
 class TrainingVisualization():
-    def __init__(self, state_dimentions, num_actions, boost_exploration_callback, mode_callback, stop_callback):
+    def __init__(self, state_dimentions, num_actions, boost_exploration_callback, stop_callback):
         plt.figure(0)
 
         # steps per run
@@ -69,18 +44,16 @@ class TrainingVisualization():
 
         plt.figure(1, (2, 2))
 
-        amnt_buttons = 3
+        amnt_buttons = 2
         button_nr = 0
         self.axstop = plt.axes([0.05, button_nr / amnt_buttons, 0.9, 1 / amnt_buttons])
-        self.bstop = ButtonProcessor(self.axstop, 'Stop', stop_callback)
+        self.bstop = Button(self.axstop, "Stop")
+        self.bstop.on_clicked(stop_callback)
 
         button_nr = 1
         self.axboost = plt.axes([0.05, button_nr / amnt_buttons, 0.9, 1 / amnt_buttons])
-        self.bboost = ButtonProcessor(self.axboost, 'Boost Exploration', boost_exploration_callback)
-
-        button_nr = 2
-        self.axmode = plt.axes([0.05, button_nr / amnt_buttons, .9, 1 / amnt_buttons])
-        self.bmode = ModeButtonProcessor(self.axmode, 'Run', mode_callback)
+        self.bboost = Button(self.axboost, "Boost Exploration")
+        self.bboost.on_clicked(boost_exploration_callback)
 
     def update_step_graph(self, run_number, run_steps):
         self.steps_plot.set_xdata(np.append(self.steps_plot.get_xdata(), [run_number]))
@@ -133,4 +106,4 @@ def dummy_callback():
 
 
 if __name__ == "__main__":
-    vis = TrainingVisualization((40, 40), 5, dummy_callback, dummy_callback, dummy_callback)
+    vis = TrainingVisualization((40, 40), 5, dummy_callback, dummy_callback)

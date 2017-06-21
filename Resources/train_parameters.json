@@ -1,10 +1,44 @@
 {
-  "use_old_model": 0,
-  "exploration_probability_start": 1,
-  "exploration_probability_end": 0.1,
-  "exploration_probability_runs_until_end": 500,
-  "exploration_probability_boost_runs_until_end": 50,
-  "runs_before_update": 10,
-  "runs_before_advancing_start": 30,
-  "runs_before_testing_from_start": 100
+  "collector": {
+    "resume_training": 0,
+    "exploration_probability_start": 1,
+    "exploration_probability_end": 0.1,
+    "exploration_probability_runs_until_end": 500,
+    "exploration_probability_boost_runs_until_end": 50,
+    "runs_before_update": 10,
+    "runs_before_advancing_start": 30,
+    "runs_before_testing_from_start": 100
+  },
+  "trainer": {
+    "epochs_start": 500,
+    "epochs_end": 1000,
+    "batch_size_start": 25,
+    "batch_size_end": 100,
+    "trainings_before_param_update": 5,
+    "trainings_until_end_config": 50,
+    "trainings_without_target": 3,
+    "discount_factor": 0.99,
+    "target_update_rate": 0.01,
+    "gpu_settings":{
+      "host": "137.226.189.187",
+      "port": 22,
+      "user": "useradmin",
+      "password": "cocacola",
+
+      "local_data_root": "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\nn-data\\",
+      "new_data_local": "new_data.h5",
+      "model_config_local": "model.json",
+      "model_weights_local": "weights.h5",
+      "training_params_local": "train_params.json",
+
+      "remote_data_root": "/home/useradmin/Dokumente/rm505424/CENSE/Christian/",
+      "new_data_remote": "data/new_data/new_data.h5",
+      "model_config_remote": "model/model.json",
+      "model_weights_remote": "model/weights.h5",
+      "training_params_remote": "train_params.json",
+
+      "script_remote": "train_model.py",
+      "test_script_remote": "test_model.py"
+    }
+  }
 }
