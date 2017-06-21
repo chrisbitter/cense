@@ -131,7 +131,7 @@ class RTDE_Controller:
 
     # move_to_position changes the position and orientation of the TCP of the robot relative to the defined Cartesian plane
     # if wire is touched, move back to old position
-    def move_to_pose(self, target_pose, steps=10, force=False):
+    def move_to_pose(self, target_pose, step_size=None, force=False):
 
         with self.lock:
 
@@ -148,13 +148,25 @@ class RTDE_Controller:
                 raise ConnectionError
 
             start_pose = np.array(state.__dict__[b'actual_TCP_pose'])
-            step = (np.array(target_pose) - start_pose) / steps
+
+            if step_size is not None:
+                distance = float(np.linalg.norm(start_pose[:3] - target_pose[:3]))
+
+                steps = int(distance // step_size)
+            else:
+                steps = 0
+
+            if steps:
+                step = (np.array(target_pose) - start_pose) / steps
+            else:
+                step = np.zeros(6)
 
             # if robot is touching wire, its stuck!
             if self.loop.is_touching_wire() and not force:
                 raise TerminalStateError
 
             touched_wire = False
+
 
             for s in range(steps):
                 if not self.loop.has_touched_wire() or force:
@@ -163,14 +175,34 @@ class RTDE_Controller:
                     for i in range(6):
                         self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = new_pose[i]
                         # Send new position
-                        self.connection.send(self.target_pose)
+                    self.connection.send(self.target_pose)
                 else:
                     # if robot touched wire, move back to old pose
                     touched_wire = True
-                    for i in range(6):
-                        self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = start_pose[i]
+                    break
 
-                    self.connection.send(self.target_pose)
+            # move the last bit
+            if not touched_wire:
+                for i in range(6):
+                    self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = target_pose[i]
+                    # Send new position
+                self.connection.send(self.target_pose)
+
+                if self.loop.has_touched_wire() or self.loop.is_touching_wire() and not force:
+                    touched_wire = True
+
+            if touched_wire:
+                for i in range(6):
+                    self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = start_pose[i]
+
+                self.connection.send(self.target_pose)
+
+            time.sleep(.1)
+
+            while True:
+                state = self.connection.receive()
+                if state.__dict__[b'output_int_register_0'] == 0:
+                    break
 
             # if robot ended up in a terminal state and wasn't forced there, something went wrong
             if self.loop.is_touching_wire() and not force:

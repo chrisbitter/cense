@@ -35,7 +35,7 @@ class Loop:
                 if value_a0 > value_a1:
                     self.touched_wire = True
 
-            time.sleep(.1)
+            time.sleep(.05)
 
     def has_touched_wire(self):
         time.sleep(.2)
@@ -47,7 +47,7 @@ class Loop:
         self.touched_wire = False
 
         now = time.time()
-        while time.time() - now < .5:
+        while time.time() - now < .4:
             if self.touched_wire:
                 return True
 

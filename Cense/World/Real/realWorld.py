@@ -40,10 +40,9 @@ class RealWorld(object):
     CURRENT_STEP_WATCHDOG = 0
 
     translation_constant = .01
+    step_size = .002
     rotation_constant = 30
     camera = None
-
-    loop = None
 
     last_action = None
 
@@ -52,7 +51,6 @@ class RealWorld(object):
 
         self.controller = RTDE_Controller()
         self.camera = Camera(self.STATE_DIMENSIONS)
-        self.loop = Loop()
 
         self.reset()
 
@@ -102,7 +100,7 @@ class RealWorld(object):
         terminal = False
 
         try:
-            touched_wire = self.controller.move_to_pose(next_pose, force)
+            touched_wire = self.controller.move_to_pose(next_pose, self.step_size, force)
 
             if touched_wire:
                 reward = self.PUNISHMENT_WIRE
@@ -128,7 +126,10 @@ class RealWorld(object):
             # should never occur with current setup!
             raise
         except TerminalStateError:
-            raise
+            try:
+                self.reset()
+            except:
+                raise
 
     def observe_state(self):
         logging.debug("Real World - observe_state")
@@ -157,33 +158,36 @@ class RealWorld(object):
 
     def reset(self):
         logging.debug("Real World - reset")
+        print("reset")
 
         pose, _ = self.controller.current_pose()
         pose[1] = self.Y_DISENGAGED
-        self.controller.move_to_pose(pose, True)
+        self.controller.move_to_pose(pose, force=True)
 
         pose = self.CURRENT_START_POSE
         pose[1] = self.Y_DISENGAGED
-        self.controller.move_to_pose(pose, True)
+        self.controller.move_to_pose(pose, force=True)
 
         pose[1] = self.Y_ENGAGED
         try:
             touched_wire = self.controller.move_to_pose(pose)
         except TerminalStateError:
+            print("terminal")
             touched_wire = True
 
-        # if current_start is not global start, try resetting everything
-        if self.CURRENT_START_POSE != self.START_POSE:
-            self.reset_current_start_pose()
+        if touched_wire:
+            # if current_start is not global start, try resetting everything
+            if (self.CURRENT_START_POSE != self.START_POSE).all():
+                self.reset_current_start_pose()
 
-            # try resetting again with global start
-            try:
-                self.reset()
-            except:
-                # global pose couldn't be reached without touching the wire
-                raise
-        else:
-            raise TerminalStateError
+                # try resetting again with global start
+                try:
+                    self.reset()
+                except:
+                    # global pose couldn't be reached without touching the wire
+                    raise
+            else:
+                raise TerminalStateError
 
         # reset checkpoints
         self.__checkpoints = [self.CURRENT_START_POSE[:3]]
@@ -205,8 +209,9 @@ class RealWorld(object):
         self.CURRENT_START_POSE = self.START_POSE
 
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.DEBUG)
+    #logging.getLogger().setLevel(logging.DEBUG)
 
     world = RealWorld()
 
-    world.reset()
+    for _ in range(20):
+        world.execute(0)

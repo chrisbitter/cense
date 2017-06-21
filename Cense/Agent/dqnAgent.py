@@ -322,14 +322,9 @@ class DeepQNetworkAgent(object):
                 run_reward += reward
 
             except TerminalStateError:
-                # normally happens, when run starts in terminal state. Try resetting world
-                try:
-                    self.world.reset()
-                except TerminalStateError:
-                    # if reset also throws TerminalStateError, something is seriously wrong! Abort everything
-                    logging.error("Hard reset still leads to Terminal State! Abort training!")
-                    self.stop_training()
-                    raise
+                # Abort everything
+                logging.error("Hard reset still leads to Terminal State! Abort training!")
+                self.stop_training()
                 break
             except InsufficientProgressError:
                 logging.info("Insufficient Progress. Aborting Run.")
