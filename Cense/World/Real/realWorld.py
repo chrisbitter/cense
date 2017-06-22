@@ -2,10 +2,10 @@
 from Cense.World.Camera.camera_videocapture import Camera
 from Cense.World.Robot.rtde_controller import RTDE_Controller, IllegalPoseException, TerminalStateError
 from Cense.World.Loop.loop import Loop
-import math
 import numpy as np
 import logging
 import time
+import math
 
 class InsufficientProgressError(Exception):
     def __init__(self, *args):
@@ -40,8 +40,10 @@ class RealWorld(object):
     CURRENT_STEP_WATCHDOG = 0
 
     translation_constant = .01
-    step_size = .002
-    rotation_constant = 30
+    translation_step_size = .002
+    rotation_constant = 30 * math.pi / 180
+    rotation_step_size = 10 * math.pi / 180
+
     camera = None
 
     last_action = None
@@ -64,6 +66,7 @@ class RealWorld(object):
 
         if not force:
             if self.CURRENT_STEP_WATCHDOG == 0:
+                self.reset()
                 raise InsufficientProgressError
             else:
                 self.CURRENT_STEP_WATCHDOG -= 1
@@ -90,17 +93,17 @@ class RealWorld(object):
             next_pose[2] -= self.translation_constant * math.cos(next_pose[4])
         elif action == 3:
             # turn positively around y
-            next_pose[4] += self.rotation_constant * math.pi / 180
+            next_pose[4] += self.rotation_constant
         elif action == 4:
             # turn negatively around y
-            next_pose[4] -= RealWorld.rotation_constant * math.pi / 180
+            next_pose[4] -= RealWorld.rotation_constant
         else:
             logging.error("Unknown action: %i" % action)
 
         terminal = False
 
         try:
-            touched_wire = self.controller.move_to_pose(next_pose, self.step_size, force)
+            touched_wire = self.controller.move_to_pose(next_pose, self.translation_step_size, self.rotation_step_size, force)
 
             if touched_wire:
                 reward = self.PUNISHMENT_WIRE
@@ -128,6 +131,7 @@ class RealWorld(object):
         except TerminalStateError:
             try:
                 self.reset()
+                return None, None, None
             except:
                 raise
 
@@ -214,4 +218,4 @@ if __name__ == "__main__":
     world = RealWorld()
 
     for _ in range(20):
-        world.execute(0)
+        world.execute(4)

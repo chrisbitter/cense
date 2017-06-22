@@ -259,10 +259,10 @@ class DeepQNetworkAgent(object):
 
         self.vis.show()
 
-    def stop_training(self):
+    def stop_training(self, event=None):
         self.stop = True
 
-    def boost_exploration(self):
+    def boost_exploration(self, event=None):
         self.exploration_probability = self.exploration_probability_start
 
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_end) ** (
@@ -309,17 +309,19 @@ class DeepQNetworkAgent(object):
             try:
                 suc_state, reward, terminal = self.world.execute(action)
 
-                states.append(state)
-                actions.append(action)
-                rewards.append(reward)
-                suc_states.append(suc_state)
-                terminals.append(terminal)
+                if suc_state is not None and reward is not None and terminal is not None:
 
-                state = suc_state
+                    states.append(state)
+                    actions.append(action)
+                    rewards.append(reward)
+                    suc_states.append(suc_state)
+                    terminals.append(terminal)
 
-                # collect stats
-                run_steps += 1
-                run_reward += reward
+                    state = suc_state
+
+                    # collect stats
+                    run_steps += 1
+                    run_reward += reward
 
             except TerminalStateError:
                 # Abort everything
@@ -336,7 +338,7 @@ class DeepQNetworkAgent(object):
 
 
 if __name__ == '__main__':
-    # logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.ERROR)
 
     agent = DeepQNetworkAgent()
 

@@ -73,7 +73,7 @@ class GPU_Trainer(object):
         self.test_script_remote = gpu_settings["remote_data_root"] + gpu_settings["test_script_remote"]
         #todo test if configs are correct -> connect to gpu etc.
 
-    def train(self, experience):
+    def train(self, states, actions, rewards, suc_states, terminals):
 
         if self.host is None or self.port is None or self.username is None or self.password is None:
             print("Credentials missing!")
@@ -96,11 +96,11 @@ class GPU_Trainer(object):
         # Send experience & configuration to GPU
         # pack data into hdf file (overwrites existing data!)
         with h5py.File(self.new_data_local, 'w') as f:
-            f.create_dataset('states', data=experience[0])
-            f.create_dataset('actions', data=experience[1])
-            f.create_dataset('rewards', data=experience[2])
-            f.create_dataset('suc_states', data=experience[3])
-            f.create_dataset('terminals', data=experience[4])
+            f.create_dataset('states', data=states)
+            f.create_dataset('actions', data=actions)
+            f.create_dataset('rewards', data=rewards)
+            f.create_dataset('suc_states', data=suc_states)
+            f.create_dataset('terminals', data=terminals)
 
         # init sftp
         transport = paramiko.Transport((self.host, self.port))

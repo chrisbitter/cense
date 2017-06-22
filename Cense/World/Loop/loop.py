@@ -44,10 +44,13 @@ class Loop:
         return response
 
     def is_touching_wire(self):
+
+        time.sleep(.2)
+
         self.touched_wire = False
 
         now = time.time()
-        while time.time() - now < .4:
+        while time.time() - now < .3:
             if self.touched_wire:
                 return True
 
