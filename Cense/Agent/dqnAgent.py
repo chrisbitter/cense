@@ -1,22 +1,19 @@
-import threading
 import logging
-from Cense.Trainer.gpu import GPU_Trainer
-import matplotlib.pyplot as plt
-import json
-import csv
 
-import math
 from Cense.World.Real.realWorld import RealWorld as World
-# from Resources.PrioritizedExperienceReplay.rank_based import Experience
+from Cense.Trainer.gpuTrainer import GpuTrainer as Trainer
+import Cense.NeuralNetworkFactory.nnFactory as Factory
+
 from Cense.World.Real.realWorld import TerminalStateError, InsufficientProgressError
 
-import Cense.NeuralNetworkFactory.nnFactory as Factory
-from Cense.Visualization.visualization import TrainingVisualization
+from Cense.Interface.interface import Interface as Interface
+
+import os
+import json
+import csv
 import time
 import numpy as np
-import os, stat
-from keras.models import model_from_json
-from threading import Thread, Lock
+from threading import Thread
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -33,17 +30,12 @@ class DeepQNetworkAgent(object):
 
     working_collectors = 0
 
-    vis = None
-
     pause = True
     stop = False
 
     def __init__(self):
 
         project_root_folder = os.path.join(os.getcwd(), "..", "..", "")
-
-        # use the real world
-        self.world = World()
 
         with open(self.train_parameters) as json_data:
             config = json.load(json_data)
@@ -58,11 +50,16 @@ class DeepQNetworkAgent(object):
         self.runs_before_update = collector_config["runs_before_update"]
         self.runs_before_advancing_start = collector_config["runs_before_advancing_start"]
         self.runs_before_testing_from_start = collector_config["runs_before_testing_from_start"]
+        self.min_steps_before_model_save = collector_config["min_steps_before_model_save"]
 
         self.exploration_probability = self.exploration_probability_start
 
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_start) ** (
             1 / self.exploration_probability_runs_until_end)
+
+        self.interface = Interface(self.stop_training, self.boost_exploration)
+
+        self.world = World(self.interface.set_status)
 
         self.model = Factory.model_dueling_keras(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
 
@@ -79,11 +76,9 @@ class DeepQNetworkAgent(object):
             #    file.write(self.model.to_json())
             self.model.save_weights(self.weights_file)
 
-        self.trainer = GPU_Trainer(project_root_folder, config["trainer"])
+        self.trainer = Trainer(config["trainer"], self.interface.set_status)
 
         self.trainer.send_model_to_gpu()
-
-        self.vis = TrainingVisualization(self.world.STATE_DIMENSIONS, self.world.ACTIONS, self.boost_exploration, self.stop_training)
 
         self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
         os.makedirs(self.experiment_directory)
@@ -96,19 +91,22 @@ class DeepQNetworkAgent(object):
         suc_states = []
         terminals = []
 
-        statistics = {}
-        statistics["steps"] = []
-        statistics["rewards"] = []
-        statistics["exploration_probability"] = []
-        statistics["advancing_steps"] = []
-        statistics["advancing_rewards"] = []
-        statistics["testing_steps"] = []
-        statistics["testing_rewards"] = []
-        statistics["successful_network_update"] = []
-
+        statistics = {
+            "steps": [],
+            "rewards": [],
+            "exploration_probability": [],
+            "advancing_steps": [],
+            "advancing_rewards": [],
+            "testing_steps": [],
+            "testing_rewards": [],
+            "successful_network_update": []
+        }
+        
         # statistics
         run_number = 1
         training_number = 1
+
+        best_test_steps = 1
 
         self.stop = False
 
@@ -118,8 +116,8 @@ class DeepQNetworkAgent(object):
                 break
 
             try:
-                new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = self.run_until_terminal(
-                    self.exploration_probability)
+                new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                    self.run_until_terminal(self.exploration_probability)
             except TerminalStateError:
                 break
 
@@ -130,13 +128,11 @@ class DeepQNetworkAgent(object):
                 [suc_states.append(s) for s in new_suc_states]
                 [terminals.append(t) for t in new_terminals]
 
-                print("Run", run_number)
+                self.interface.set_status("Run ", str(run_number))
 
                 # plot
-                self.vis.update_step_graph(run_number, run_steps)
-                self.vis.update_reward_graph(run_number, run_reward)
-                self.vis.update_exploration_graph(run_number, self.exploration_probability)
-                self.vis.draw()
+                self.interface.update_steps(run_number, run_steps)
+                self.interface.update_exploration(run_number, self.exploration_probability)
 
                 # collect statistics
                 statistics["steps"].append(run_steps)
@@ -173,7 +169,7 @@ class DeepQNetworkAgent(object):
                 # try how far we get with the current model.
                 # take last stable state as new starting point
                 if run_number % self.runs_before_advancing_start == 0:
-                    print("Advancing Start Position!")
+                    self.interface.set_status("Advancing Start Position!")
                     self.world.last_action = None
 
                     try:
@@ -199,7 +195,7 @@ class DeepQNetworkAgent(object):
                     else:
                         self.world.update_current_start_pose()
                     # self.world.deactivate()
-                    print("Advanced start by", run_steps, "steps")
+                    self.interface.set_status("Advanced start by ", run_steps, " steps")
 
                 # reset to start pose and see how far we get
                 # if we don't get better at this, we might consider measures like resetting to the last network
@@ -225,27 +221,29 @@ class DeepQNetworkAgent(object):
                         statistics["testing_steps"].append(run_steps)
                         statistics["testing_rewards"].append(run_reward)
 
-                        model_filename = os.path.join(self.experiment_directory, 'model-test-' + str(run_number))
-                        self.model.save_weights(model_filename)
+                        if run_steps > best_test_steps and run_steps >= self.min_steps_before_model_save:
+                            self.model.save_weights(self.model.save_weights(os.path.join(self.experiment_directory,
+                                                                                         'weights_' + str(run_number)
+                                                                                         + str(run_steps) + '.h5')))
 
                     if self.world.is_at_goal():
                         # once the wire is learned successfully, stop training
                         self.world.reset_current_start_pose()
                         self.world.reset()
-                        print("Successfully completed wire!")
+                        self.model.save_weights(os.path.join(self.experiment_directory, 'weights_' + str(run_number)
+                                                             + str(run_steps) + '_goal.h5'))
+                        self.interface.set_status("Successfully completed wire!")
                         self.stop_training()
                     else:
                         self.world.update_current_start_pose()
 
-                    self.vis.update_test_step_graph(run_number, run_steps)
+                    self.interface.update_test_steps(run_number, run_steps)
 
-                    print(run_steps, "steps from start position")
+                    self.interface.set_status(run_steps, "steps from start position")
 
                 run_number += 1
 
-        print("Stop training")
-
-        statistics_file = os.path.join(self.experiment_directory, (time.strftime('%Y%m%d-%H%M%S') + '.csv'))
+        statistics_file = os.path.join(self.experiment_directory, 'statistics.csv')
 
         cols = max([len(vals) for vals in statistics.values()])
 
@@ -257,12 +255,10 @@ class DeepQNetworkAgent(object):
             writer.writerow(statistics.keys())
             writer.writerows(zip(*statistics.values()))
 
-        self.vis.show()
-
-    def stop_training(self, event=None):
+    def stop_training(self):
         self.stop = True
 
-    def boost_exploration(self, event=None):
+    def boost_exploration(self):
         self.exploration_probability = self.exploration_probability_start
 
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_end) ** (
@@ -299,18 +295,16 @@ class DeepQNetworkAgent(object):
                 action = np.argmax(q_values)
 
             if action == np.argmax(q_values):
-                self.vis.update_qvalue_graph(q_values, action, 'b', 'g')
+                self.interface.update_q_value(q_values[0], action, 'g')
             else:
-                self.vis.update_qvalue_graph(q_values, action, 'b', 'r')
+                self.interface.update_q_value(q_values[0], action, 'r')
 
-            self.vis.update_state_view(state)
-            self.vis.draw()
+            self.interface.update_state(state)
 
             try:
                 suc_state, reward, terminal = self.world.execute(action)
 
                 if suc_state is not None and reward is not None and terminal is not None:
-
                     states.append(state)
                     actions.append(action)
                     rewards.append(reward)
@@ -325,11 +319,11 @@ class DeepQNetworkAgent(object):
 
             except TerminalStateError:
                 # Abort everything
-                logging.error("Hard reset still leads to Terminal State! Abort training!")
+                self.interface.set_status("Robot stuck in Terminal State. Abort training.")
                 self.stop_training()
                 break
             except InsufficientProgressError:
-                logging.info("Insufficient Progress. Aborting Run.")
+                self.interface.set_status("Insufficient Progress. Aborting Run.")
                 break
 
         # self.world.deactivate()

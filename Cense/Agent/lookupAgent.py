@@ -1,16 +1,17 @@
-import numpy as np
 import sys
-import json
-from Cense.World.Simulated.simulatedWorld import SimulatedWorld
+
+import numpy as np
+
 # from World.Real.realWorld import RealWorld
-from Cense.Decider.Lookup.lookupDecider import LookupDecider
+from Resources.misc.Decider.Lookup.lookupDecider import LookupDecider
+from Resources.misc.Simulated.simulatedWorld import SimulatedWorld
 
 
 class AlreadyTrainedException(Exception):
     pass
 
 
-class CenseAgent:
+class LookupAgent:
     simulated_world = None
     real_world = None
     decider = None
@@ -251,7 +252,7 @@ if __name__ == '__main__':
     wire_path = '../../Resources/wires/Cense_wire_01.png'
 
     # Initialize Agent
-    agent = CenseAgent(wire_path, random_action_probability, think_ahead_value, lookup_table_path)
+    agent = LookupAgent(wire_path, random_action_probability, think_ahead_value, lookup_table_path)
 
     # Iterate over all wires
     for j in range(1, 32):

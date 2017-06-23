@@ -1,13 +1,14 @@
-import numpy as np
+import os
+
 import h5py
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+from pyfirmata import Arduino, util
+
+import Cense.NeuralNetworkFactory.nnFactory as factory
 # import Cense.NeuralNetworkFactory.nnFactory as factory
 from Cense.World.Camera.camera_videocapture import Camera
-import matplotlib.pyplot as plt
-import time
-from pyfirmata import Arduino, util
-import Cense.NeuralNetworkFactory.nnFactory as factory
-import tensorflow as tf
-import os
 
 
 def save_array():

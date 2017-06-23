@@ -33,7 +33,7 @@ class Visualizer(object):
 
     def show(self):
         print("show")
-        plt.figure(0)
+        fig = plt.figure(0)
 
         rows = 10
         cols = 10

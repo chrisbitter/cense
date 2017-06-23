@@ -1,8 +1,10 @@
-from Cense.Decider.decider import Decider
 import json
-import numpy as np
-from Cense.Decider.action import Action
 import warnings
+
+import numpy as np
+from Cense.Decider.decider import Decider
+
+from Resources.misc.Decider.action import Action
 
 
 #

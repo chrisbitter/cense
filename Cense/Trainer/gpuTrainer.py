@@ -5,7 +5,8 @@ import json
 import os
 import logging
 
-class GPU_Trainer(object):
+
+class GpuTrainer(object):
 
     host = None
     port = None
@@ -29,8 +30,10 @@ class GPU_Trainer(object):
 
     training_number = 0
 
-    def __init__(self, project_root_folder, trainer_config):
-        print("Setup Trainer")
+    def __init__(self, trainer_config, set_status_func):
+
+        self.set_status_func = set_status_func
+        set_status_func("Setup Trainer")
 
         self.epochs_start = trainer_config["epochs_start"]
         self.epochs_end = trainer_config["epochs_end"]
@@ -71,7 +74,6 @@ class GPU_Trainer(object):
 
         self.script_remote = gpu_settings["remote_data_root"] + gpu_settings["script_remote"]
         self.test_script_remote = gpu_settings["remote_data_root"] + gpu_settings["test_script_remote"]
-        #todo test if configs are correct -> connect to gpu etc.
 
     def train(self, states, actions, rewards, suc_states, terminals):
 
@@ -85,8 +87,10 @@ class GPU_Trainer(object):
         config_changed = False
 
         if self.training_number % self.trainings_before_param_update == 0:
-            self.current_gpu_config["epochs"] += (self.epochs_end - self.epochs_start) // self.trainings_until_end_config
-            self.current_gpu_config["batch_size"] += (self.batch_size_end - self.batch_size_start) // self.trainings_until_end_config
+            self.current_gpu_config["epochs"] += \
+                (self.epochs_end - self.epochs_start) // self.trainings_until_end_config
+            self.current_gpu_config["batch_size"] += \
+                (self.batch_size_end - self.batch_size_start) // self.trainings_until_end_config
             config_changed = True
 
         if self.training_number == self.trainings_without_target + 1:
@@ -169,7 +173,7 @@ class GPU_Trainer(object):
 
         # Upload Model & Weights
         # todo: check if keras model save for lambda layers has been fixed. Until then, hardcode model on gpu!
-        #sftp.put(self.model_config_local, self.model_config_remote)
+        # sftp.put(self.model_config_local, self.model_config_remote)
         sftp.put(self.model_weights_local, self.model_weights_remote)
 
         # upload initial config
@@ -231,12 +235,12 @@ class GPU_Trainer(object):
 
 if __name__ == "__main__":
 
-    gpu = GPU_Trainer(os.path.join(os.getcwd(), "..", "..", ""))
+    gpu = GpuTrainer(os.path.join(os.getcwd(), "..", "..", ""), print)
 
     import Cense.NeuralNetworkFactory.nnFactory as Factory
     import numpy as np
 
-    model = Factory.model_simple_conv((50,50), 6)
+    model = Factory.model_simple_conv((50, 50), 6)
     print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
 
     model.save_weights(gpu.model_weights_local)
@@ -249,5 +253,3 @@ if __name__ == "__main__":
     print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
 
     print("done")
-
-

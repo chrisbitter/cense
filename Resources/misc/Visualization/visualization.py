@@ -3,26 +3,31 @@ from matplotlib.widgets import Button
 import numpy as np
 
 class TrainingVisualization():
-    def __init__(self, state_dimentions, num_actions, boost_exploration_callback, stop_callback):
+    def __init__(self, state_dimensions, num_actions, boost_exploration_callback, stop_callback):
         plt.figure(0)
 
+        plots_total = 230
+        plot_nr = 1
         # steps per run
-        plt.subplot(231)
+        plt.subplot(plots_total + plot_nr)
         plt.title('steps')
         self.steps_plot, = plt.plot([], [])
         self.steps_ax = plt.gca()
 
-        plt.subplot(232)
-        plt.title('reward')
-        self.rewards_plot, = plt.plot([], [])
-        self.rewards_ax = plt.gca()
+        plot_nr += 1
+        # plt.subplot(plots_total + plot_nr)
+        # plt.title('reward')
+        # self.rewards_plot, = plt.plot([], [])
+        # self.rewards_ax = plt.gca()
 
-        plt.subplot(233)
+        plot_nr += 1
+        plt.subplot(plots_total + plot_nr)
         plt.title('exploration probability')
         self.exploration_plot, = plt.plot([], [])
         self.exploration_ax = plt.gca()
 
-        plt.subplot(234)
+        plot_nr += 1
+        plt.subplot(plots_total + plot_nr)
         action_names = ['right', 'left', 'forward', 'rot_right', 'rot_left']
         plt.xticks(range(len(action_names)), action_names, rotation='vertical')
         plt.title('q-value')
@@ -30,12 +35,14 @@ class TrainingVisualization():
         self.bar_plot = plt.bar(list(range(num_actions)), np.zeros(num_actions))
         self.bar_ax = plt.gca()
 
-        plt.subplot(235)
+        plot_nr += 1
+        plt.subplot(plots_total + plot_nr)
         plt.title('state')
-        self.cam_view = plt.imshow(np.zeros(state_dimentions), cmap='gray')
+        self.cam_view = plt.imshow(np.zeros(state_dimensions), cmap='gray')
         self.cam_view.norm.vmax = 1
 
-        plt.subplot(236)
+        plot_nr += 1
+        plt.subplot(plots_total + plot_nr)
         plt.title('steps_test')
         self.test_step_plot, = plt.plot([], [])
         self.test_step_ax = plt.gca()
@@ -61,11 +68,11 @@ class TrainingVisualization():
         self.steps_ax.relim()
         self.steps_ax.autoscale_view()
 
-    def update_reward_graph(self, run_number, run_reward):
-        self.rewards_plot.set_xdata(np.append(self.rewards_plot.get_xdata(), [run_number]))
-        self.rewards_plot.set_ydata(np.append(self.rewards_plot.get_ydata(), [run_reward]))
-        self.rewards_ax.relim()
-        self.rewards_ax.autoscale_view()
+    # def update_reward_graph(self, run_number, run_reward):
+    #     self.rewards_plot.set_xdata(np.append(self.rewards_plot.get_xdata(), [run_number]))
+    #     self.rewards_plot.set_ydata(np.append(self.rewards_plot.get_ydata(), [run_reward]))
+    #     self.rewards_ax.relim()
+    #     self.rewards_ax.autoscale_view()
 
     def update_qvalue_graph(self, q_values, action, color, highlight_color):
         for rect, q_val in zip(self.bar_plot, q_values[0]):

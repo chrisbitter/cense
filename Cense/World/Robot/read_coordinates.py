@@ -1,9 +1,9 @@
-from Cense.World.Robot.rtde_controller import RTDE_Controller
+from Cense.World.Robot.rtdeController import RtdeController
 import time
 
 timeout = 3
 
-controller = RTDE_Controller()
+controller = RtdeController(print)
 
 while True:
     pose = controller.current_pose()

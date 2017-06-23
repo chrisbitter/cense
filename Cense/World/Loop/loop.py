@@ -2,16 +2,18 @@ from pyfirmata import Arduino, util
 import time
 import threading
 
-class Loop:
-    def __init__(self, timeout=.1):
 
-        self.touched_wire = False
+class Loop:
+    def __init__(self, set_status_func):
+
+        self.set_status_func = set_status_func
+        self.set_status_func("Setup Loop")
+
+        self.timestamp_touched = 0
+        self.timestamp_not_touched = 0
 
         thread = threading.Thread(target=self.check_connection)
         thread.daemon = True
-
-        #give board 5 seconds to establish a connection
-        time.sleep(5)
 
         thread.start()
 
@@ -22,8 +24,7 @@ class Loop:
         it.start()
         board.analog[0].enable_reporting()
         board.analog[1].enable_reporting()
-        
-        
+
         analog_0 = board.get_pin('a:0:i')
         analog_1 = board.get_pin('a:1:i')
 
@@ -33,32 +34,26 @@ class Loop:
 
             if value_a0 is not None and value_a1 is not None:
                 if value_a0 > value_a1:
-                    self.touched_wire = True
+                    self.timestamp_touched = time.time()
+                else:
+                    self.timestamp_not_touched = time.time()
 
-            time.sleep(.05)
+            time.sleep(.001)
 
-    def has_touched_wire(self):
-        time.sleep(.2)
-        response = self.touched_wire
-        self.touched_wire = False
-        return response
+    def has_touched_wire(self, timestamp=0):
+        while True:
+            if self.timestamp_touched > timestamp:
+                return True
+            # second condition in case timestep_touched was updated
+            elif self.timestamp_not_touched > timestamp and self.timestamp_not_touched > self.timestamp_touched:
+                return False
 
     def is_touching_wire(self):
 
-        time.sleep(.2)
-
-        self.touched_wire = False
-
-        now = time.time()
-        while time.time() - now < .3:
-            if self.touched_wire:
-                return True
-
-        return self.touched_wire
-
+        return self.has_touched_wire(time.time())
 
 if __name__ == "__main__":
-    loop = Loop()
+    loop = Loop(print)
 
     while True:
         print(loop.has_touched_wire())
