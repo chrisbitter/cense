@@ -609,7 +609,7 @@ class SimulatedWorld(World):
     # Runs a few tests
     #
     def test(self):
-        print("World shape = " + str(self.__world.shape))
+        print("Environment shape = " + str(self.__world.shape))
         # # Check if in world states work
         # in_world_coords = [math.ceil(self.__world.shape[0] / 2 - self.__state_size / 2), 0]
         # print("Check if in world coords work: ", in_world_coords)

@@ -27,19 +27,20 @@ import socket
 import struct
 import sys
 
-import Cense.World.Robot.rtde.serialize as serialize
+import Cense.Environment.Robot.rtde.serialize as serialize
 
-DEFAULT_TIMEOUT = 1.0
+DEFAULT_TIMEOUT = 2.0
+
 
 class Command:
-    RTDE_REQUEST_PROTOCOL_VERSION = 86        # ascii V
-    RTDE_GET_URCONTROL_VERSION = 118          # ascii v
-    RTDE_TEXT_MESSAGE = 77                    # ascii M
-    RTDE_DATA_PACKAGE = 85                    # ascii U
-    RTDE_CONTROL_PACKAGE_SETUP_OUTPUTS = 79   # ascii O
-    RTDE_CONTROL_PACKAGE_SETUP_INPUTS = 73    # ascii I
-    RTDE_CONTROL_PACKAGE_START = 83           # ascii S
-    RTDE_CONTROL_PACKAGE_PAUSE = 80           # ascii P
+    RTDE_REQUEST_PROTOCOL_VERSION = 86  # ascii V or 86
+    RTDE_GET_URCONTROL_VERSION = 118  # ascii v or 118
+    RTDE_TEXT_MESSAGE = 77  # ascii M or 77
+    RTDE_DATA_PACKAGE = 85  # ascii U or 85
+    RTDE_CONTROL_PACKAGE_SETUP_OUTPUTS = 79  # ascii O or 79
+    RTDE_CONTROL_PACKAGE_SETUP_INPUTS = 73  # ascii I or 73
+    RTDE_CONTROL_PACKAGE_START = 83  # ascii S or 83
+    RTDE_CONTROL_PACKAGE_PAUSE = 80  # ascii P or 80
 
 
 class ConnectionState:
@@ -57,12 +58,15 @@ class RTDE(object):
         self.__sock = None
         self.__output_config = None
         self.__input_config = {}
-        
+
+        self.__buf = b''
+
     def connect(self):
         if self.__sock:
             return
 
-        self.__buf = ''
+        self.__buf = b''
+
         try:
             self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -79,53 +83,54 @@ class RTDE(object):
             self.__sock.close()
             self.__sock = None
         self.__conn_state = ConnectionState.DISCONNECTED
-        
+
     def is_connected(self):
         return self.__conn_state is not ConnectionState.DISCONNECTED
-        
+
     def get_controller_version(self):
         cmd = Command.RTDE_GET_URCONTROL_VERSION
         version = self.__sendAndReceive(cmd)
         if version:
-            logging.info('Controller version: ' + str(version.major) + '.' + str(version.minor) + '.' + str(version.bugfix)+ '.' + str(version.build))
+            logging.info('Controller version: ' + str(version.major) + '.' + str(version.minor) + '.' + str(
+                version.bugfix) + '.' + str(version.build))
             if version.major == 3 and version.minor <= 2 and version.bugfix < 19171:
                 logging.error("Please upgrade your controller to minimally version 3.2.19171")
                 sys.exit()
             return version.major, version.minor, version.bugfix, version.build
         return None, None, None
-        
+
     def negotiate_protocol_version(self, protocol):
         cmd = Command.RTDE_REQUEST_PROTOCOL_VERSION
-        payload = struct.pack('>H',protocol)
+        payload = struct.pack('>H', protocol)
         version = self.__sendAndReceive(cmd, payload)
         return version == protocol
-        
-    def send_input_setup(self, variables, types=[]):
+
+    def send_input_setup(self, variables, types):
         cmd = Command.RTDE_CONTROL_PACKAGE_SETUP_INPUTS
-        payload = ','.join(variables)
+        payload = b','.join(variables)
         result = self.__sendAndReceive(cmd, payload)
-        if len(types)!=0 and not self.__list_equals(result.types, types):
+        if len(types) != 0 and not self.__list_equals(result.types, types):
             logging.error('Data type inconsistency for input setup: ' +
-                     str(types) + ' - ' +
-                     str(result.types))
+                          str(types) + ' - ' +
+                          str(result.types))
             return None
         result.names = variables
         self.__input_config[result.id] = result
         return serialize.DataObject.create_empty(variables, result.id)
-        
-    def send_output_setup(self, variables, types=[]):
+
+    def send_output_setup(self, variables, types):
         cmd = Command.RTDE_CONTROL_PACKAGE_SETUP_OUTPUTS
-        payload = ','.join(variables)
+        payload = b','.join(variables)
         result = self.__sendAndReceive(cmd, payload)
-        if len(types)!=0 and not self.__list_equals(result.types, types):
+        if len(types) != 0 and not self.__list_equals(result.types, types):
             logging.error('Data type inconsistency for output setup: ' +
-                     str(types) + ' - ' +
-                     str(result.types))
+                          str(types) + ' - ' +
+                          str(result.types))
             return False
         result.names = variables
         self.__output_config = result
         return True
-        
+
     def send_start(self):
         cmd = Command.RTDE_CONTROL_PACKAGE_START
         success = self.__sendAndReceive(cmd)
@@ -135,7 +140,7 @@ class RTDE(object):
         else:
             logging.error('RTDE synchronization failed to start')
         return success
-        
+
     def send_pause(self):
         cmd = Command.RTDE_CONTROL_PACKAGE_PAUSE
         success = self.__sendAndReceive(cmd)
@@ -150,7 +155,8 @@ class RTDE(object):
         if self.__conn_state != ConnectionState.STARTED:
             logging.error('Cannot send when RTDE synchronization is inactive')
             return
-        if not self.__input_config.has_key(input_data.recipe_id):
+        if input_data.recipe_id not in self.__input_config:
+            # if not self.__input_config.has_key(input_data.recipe_id):
             logging.error('Input configuration id not found: ' + str(input_data.recipe_id))
             return
         config = self.__input_config[input_data.recipe_id]
@@ -184,22 +190,28 @@ class RTDE(object):
             return self.__unpack_data_package(payload, self.__output_config)
         else:
             logging.error('Unknown package command: ' + str(cmd))
-            
-    def __sendAndReceive(self, cmd, payload=''):
+
+    def __sendAndReceive(self, cmd, payload=b''):
         if self.__sendall(cmd, payload):
             return self.__recv(cmd)
         else:
             return None
-        
-    def __sendall(self, command, payload=''):
-        fmt = '>HB'
+
+    def __sendall(self, command, payload=b''):
+        fmt = b'>HB'
+        # print('Payload: ', type(payload))
         size = struct.calcsize(fmt) + len(payload)
         buf = struct.pack(fmt, size, command) + payload
-        
+        # print(type(buf))
+        # print(buf)
+
+        # buf = str(command) + convert_to_str(payload)
+        # print(command, payload, buf, sep="   ")
+
         if self.__sock is None:
             logging.error('Unable to send: not connected to Robot')
             return False
-        
+
         _, writable, _ = select.select([], [self.__sock], [], DEFAULT_TIMEOUT)
         if len(writable):
             self.__sock.sendall(buf)
@@ -207,22 +219,23 @@ class RTDE(object):
         else:
             self.__trigger_disconnected()
             return False
-        
+
     def __recv(self, command):
         while self.is_connected():
             readable, _, _ = select.select([self.__sock], [], [], DEFAULT_TIMEOUT)
+
             if len(readable):
                 more = self.__sock.recv(4096)
+
                 if len(more) == 0:
                     self.__trigger_disconnected()
                     return None
                 self.__buf = self.__buf + more
-                
+
             # unpack_from requires a buffer of at least 3 bytes
             while len(self.__buf) >= 3:
                 # Attempts to extract a packet
                 packet_header = serialize.ControlHeader.unpack(self.__buf)
-                
                 if len(self.__buf) >= packet_header.size:
                     packet, self.__buf = self.__buf[3:packet_header.size], self.__buf[packet_header.size:]
                     data = self.__on_packet(packet_header.command, packet)
@@ -233,38 +246,38 @@ class RTDE(object):
                 else:
                     break
         return None
-    
+
     def __trigger_disconnected(self):
         logging.info("RTDE disconnected")
-        self.disconnect() #clean-up
-    
+        self.disconnect()  # clean-up
+
     def __unpack_protocol_version_package(self, payload):
         if len(payload) != 1:
             logging.error('RTDE_REQUEST_PROTOCOL_VERSION: Wrong payload size')
             return None
         result = serialize.ReturnValue.unpack(payload)
         return result.success
-    
+
     def __unpack_urcontrol_version_package(self, payload):
         if len(payload) != 16:
             logging.error('RTDE_GET_URCONTROL_VERSION: Wrong payload size')
             return None
         version = serialize.ControlVersion.unpack(payload)
         return version
-    
+
     def __unpack_text_message(self, payload):
         if len(payload) < 1:
             logging.error('RTDE_TEXT_MESSAGE: No payload')
             return None
         msg = serialize.Message.unpack(payload)
-        if(msg.level == serialize.Message.EXCEPTION_MESSAGE or 
-           msg.level == serialize.Message.ERROR_MESSAGE):
+        if (msg.level == serialize.Message.EXCEPTION_MESSAGE or
+                    msg.level == serialize.Message.ERROR_MESSAGE):
             logging.error('Server message: ' + msg.message)
         elif msg.level == serialize.Message.WARNING_MESSAGE:
             logging.warning('Server message: ' + msg.message)
         elif msg.level == serialize.Message.INFO_MESSAGE:
             logging.info('Server message: ' + msg.message)
-    
+
     def __unpack_setup_outputs_package(self, payload):
         if len(payload) < 1:
             logging.error('RTDE_CONTROL_PACKAGE_SETUP_OUTPUTS: No payload')
@@ -272,7 +285,7 @@ class RTDE(object):
         has_recipe_id = False
         output_config = serialize.DataConfig.unpack_recipe(payload, has_recipe_id)
         return output_config
-    
+
     def __unpack_setup_inputs_package(self, payload):
         if len(payload) < 1:
             logging.error('RTDE_CONTROL_PACKAGE_SETUP_INPUTS: No payload')
@@ -280,33 +293,33 @@ class RTDE(object):
         has_recipe_id = True
         input_config = serialize.DataConfig.unpack_recipe(payload, has_recipe_id)
         return input_config
-    
+
     def __unpack_start_package(self, payload):
         if len(payload) != 1:
             logging.error('RTDE_CONTROL_PACKAGE_START: Wrong payload size')
             return None
         result = serialize.ReturnValue.unpack(payload)
         return result.success
-    
+
     def __unpack_pause_package(self, payload):
         if len(payload) != 1:
             logging.error('RTDE_CONTROL_PACKAGE_PAUSE: Wrong payload size')
             return None
         result = serialize.ReturnValue.unpack(payload)
         return result.success
-    
+
     def __unpack_data_package(self, payload, output_config):
         if output_config is None:
             logging.error('RTDE_DATA_PACKAGE: Missing output configuration')
             return None
         output = output_config.unpack(payload)
         return output
-    
+
     def __list_equals(self, l1, l2):
         if len(l1) != len(l2):
             return False
         for i in range(len((l1))):
             if l1[i] != l2[i]:
                 return False
+
         return True
-    

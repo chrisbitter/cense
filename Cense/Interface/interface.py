@@ -57,7 +57,7 @@ class MplCanvas(FigureCanvas):
         self.y.append(y)
 
         # self.axes.cla()
-        self.axes.plot(self.x, self.y, marker='o')
+        self.axes.plot(self.x, self.y, color='b', marker='o')
 
         self.draw()
         time.sleep(.01)
@@ -76,6 +76,16 @@ class BarCanvas(FigureCanvas):
 
         self.num_actions = num_actions
         self.rects = self.axes.bar(list(range(self.num_actions)), [0] * self.num_actions)
+        action_names = ['left', 'rot_left', 'forward', 'rot_right', 'right']
+
+        self.axes.set_xticks(range(len(action_names)))
+        self.axes.set_xticklabels(action_names)
+
+        # for label, name in zip(self.axes.get_xticklabels(), action_names):
+        #     print(label.get_text())
+        #     label.set_text(name)
+
+        self.axes.set_xticklabels(action_names)
 
         FigureCanvas.setSizePolicy(self,
                                    QtWidgets.QSizePolicy.Expanding,
@@ -118,7 +128,8 @@ class PictureCanvas(FigureCanvas):
 
 
 class ApplicationWindow(QtWidgets.QMainWindow):
-    def __init__(self, stop_callback, boost_callback):
+    def __init__(self, start_callback, stop_callback, boost_callback):
+        self.start_callback = start_callback
         self.stop_callback = stop_callback
         self.boost_callback = boost_callback
 
@@ -137,6 +148,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
         self.help_menu.addAction('&About', self.about)
 
+        self.startAction = QAction(QIcon(), 'Start', self)
+        self.startAction.triggered.connect(self.start)
+
         self.stopAction = QAction(QIcon(), 'Stop', self)
         self.stopAction.triggered.connect(self.stop)
 
@@ -144,6 +158,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.boostExploration.triggered.connect(self.boost)
 
         self.toolbar = self.addToolBar('Toolbar')
+        self.toolbar.addAction(self.startAction)
         self.toolbar.addAction(self.stopAction)
         self.toolbar.addAction(self.boostExploration)
 
@@ -160,8 +175,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.test_steps_canvas = MplCanvas(self.main_widget, label='Test Run Steps', width=5, height=4, dpi=100)
 
         l.addWidget(self.steps_canvas, 1, 1)
-        l.addWidget(self.exploration_canvas, 2, 3)
-        l.addWidget(self.q_value_canvas, 1, 3)
+        l.addWidget(self.exploration_canvas, 1, 3)
+        l.addWidget(self.q_value_canvas, 2, 2)
         l.addWidget(self.state_canvas, 1, 2)
         l.addWidget(self.test_steps_canvas, 2, 1)
 
@@ -169,6 +184,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.main_widget)
 
         self.statusBar().showMessage("Ready!")
+
+    def start(self):
+        self.start_callback()
 
     def stop(self):
         self.stop_callback()
@@ -190,28 +208,33 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                                     """CENSE Training Environment""")
 
 
+def check_app_status(f):
+    def wrapper(*args):
+        if args[0].aw is not None:
+            return f(*args)
+
+    return wrapper
+
+
 class Interface(object):
     qApp = None
     aw = None
+    t = Thread()
 
-    def __init__(self, stop_callback, boost_callback):
+    def __init__(self, start_callback, stop_callback, boost_callback):
+        self.start_callback = start_callback
         self.stop_callback = stop_callback
         self.boost_callback = boost_callback
 
+        self.t = Thread(target=self.run)
+        self.t.start()
+
     def run(self):
         self.qApp = QtWidgets.QApplication(sys.argv)
-        self.aw = ApplicationWindow(self.stop_callback, self.boost_callback)
+        self.aw = ApplicationWindow(self.start_callback, self.stop_callback, self.boost_callback)
         self.aw.setWindowTitle("%s" % progname)
         self.aw.show()
-        sys.exit(self.qApp.exec_())
-
-    @staticmethod
-    def check_app_status(f):
-        def wrapper(*args):
-            if args[0].aw is not None:
-                return f(*args)
-
-        return wrapper
+        self.qApp.exec_()
 
     @check_app_status
     def update_steps(self, run_number, run_steps):
@@ -239,21 +262,17 @@ class Interface(object):
         for arg in args:
             status += str(arg)
         self.aw.set_status(status)
+        print(status)
 
+
+def dummy_callback():
+    print("callback")
 
 if __name__ == "__main__":
 
-    vis = Interface(print, print)
+    vis = Interface(dummy_callback, dummy_callback, dummy_callback)
 
-    t = Thread(target=vis.run)
-    t.setDaemon(True)
-    t.start()
+    time.sleep(2)
 
-    for t in range(50):
-        time.sleep(1)
-        vis.update_steps(t, t)
-        vis.update_state(np.random.rand(t, t))
-        vis.update_exploration(t, 1 / (t + 1))
-        vis.update_q_value(np.array([t, t % 2, t % 3, t ** 2, -t]), np.random.randint(5), 'r')
-        if t % 10 == 0:
-            vis.update_test_steps(t, np.random.random())
+    for t in range(500):
+        vis.set_status(t)

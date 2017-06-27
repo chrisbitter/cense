@@ -38,7 +38,7 @@ class Loop:
                 else:
                     self.timestamp_not_touched = time.time()
 
-            time.sleep(.001)
+            time.sleep(.01)
 
     def has_touched_wire(self, timestamp=0):
         while True:

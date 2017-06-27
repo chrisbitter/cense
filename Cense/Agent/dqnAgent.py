@@ -1,19 +1,17 @@
-import logging
-
-from Cense.World.Real.realWorld import RealWorld as World
-from Cense.Trainer.gpuTrainer import GpuTrainer as Trainer
-import Cense.NeuralNetworkFactory.nnFactory as Factory
-
-from Cense.World.Real.realWorld import TerminalStateError, InsufficientProgressError
-
-from Cense.Interface.interface import Interface as Interface
-
-import os
-import json
 import csv
+import json
+import logging
+import os
 import time
-import numpy as np
 from threading import Thread
+
+import numpy as np
+
+import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
+from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
+from Cense.Environment.realEnvironment import RealEnvironment as World
+from Cense.Environment.realEnvironment import *
+from Cense.Interface.interface import Interface as Interface
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -30,15 +28,24 @@ class DeepQNetworkAgent(object):
 
     working_collectors = 0
 
-    pause = True
+    start = False
     stop = False
 
     def __init__(self):
 
-        project_root_folder = os.path.join(os.getcwd(), "..", "..", "")
+        self.interface = Interface(self.start_training, self.stop_training, self.boost_exploration)
+
+        while not self.start:
+            pass
+
+        self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
+        os.makedirs(self.experiment_directory)
 
         with open(self.train_parameters) as json_data:
             config = json.load(json_data)
+
+        with open(os.path.join(self.experiment_directory, 'train_parameters.json'), 'w') as f:
+            json.dump(config, f, sort_keys=True, indent=4)
 
         collector_config = config["collector"]
 
@@ -57,9 +64,7 @@ class DeepQNetworkAgent(object):
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_start) ** (
             1 / self.exploration_probability_runs_until_end)
 
-        self.interface = Interface(self.stop_training, self.boost_exploration)
-
-        self.world = World(self.interface.set_status)
+        self.world = World(config["environment"], self.interface.set_status)
 
         self.model = Factory.model_dueling_keras(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
 
@@ -80,9 +85,6 @@ class DeepQNetworkAgent(object):
 
         self.trainer.send_model_to_gpu()
 
-        self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
-        os.makedirs(self.experiment_directory)
-
     def train(self):
 
         states = []
@@ -91,169 +93,204 @@ class DeepQNetworkAgent(object):
         suc_states = []
         terminals = []
 
-        statistics = {
-            "steps": [],
-            "rewards": [],
-            "exploration_probability": [],
-            "advancing_steps": [],
-            "advancing_rewards": [],
-            "testing_steps": [],
-            "testing_rewards": [],
-            "successful_network_update": []
-        }
-        
         # statistics
-        run_number = 1
+        run_number = 0
         training_number = 1
 
         best_test_steps = 1
 
         self.stop = False
 
+        statistics_file = os.path.join(self.experiment_directory, 'statistics.csv')
+
+        statistics_keys = ["run_number", "steps", "rewards", "exploration_probability", "advancing_steps",
+                           "advancing_rewards", "testing_steps", "testing_rewards", "successful_network_update"]
+
+        with open(statistics_file, 'a') as f:
+            f.write(",".join(statistics_keys))
+            f.write("\n")
+
         while True:
 
             if self.stop:
                 break
 
-            try:
-                new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
-                    self.run_until_terminal(self.exploration_probability)
-            except TerminalStateError:
-                break
+            # reset statistics
+            statistics = {}
 
-            if run_steps:
-                [states.append(s) for s in new_states]
-                [actions.append(a) for a in new_actions]
-                [rewards.append(r) for r in new_rewards]
-                [suc_states.append(s) for s in new_suc_states]
-                [terminals.append(t) for t in new_terminals]
+            for key in statistics_keys:
+                statistics[key] = ""
 
-                self.interface.set_status("Run ", str(run_number))
+            statistics["run_number"] = run_number+1
 
-                # plot
-                self.interface.update_steps(run_number, run_steps)
-                self.interface.update_exploration(run_number, self.exploration_probability)
+            self.interface.set_status("Run ", str(run_number+1))
 
-                # collect statistics
-                statistics["steps"].append(run_steps)
-                statistics["rewards"].append(run_reward)
-                statistics["exploration_probability"].append(self.exploration_probability)
+            # reset to start pose and see how far we get
+            # if we don't get better at this, we might consider measures like resetting to the last network
+            # that worked best or boosting exploration
+            if run_number % self.runs_before_testing_from_start == 0 and not self.stop:
 
-                # train neural network after collecting some experience
-                if run_number % self.runs_before_update == 0:
-                    if self.trainer.is_done_training():
+                self.interface.set_status("Test from Start without Exploration")
 
-                        statistics["successful_network_update"].append(True)
-                        logging.debug("Replace NN and start new training")
-
-                        self.model.load_weights(self.weights_file)
-                        Thread(target=self.trainer.train,
-                               args=(states, actions, rewards, suc_states, terminals)).start()
-
-                        training_number += 1
-
-                        # clear experience collection
-                        states = []
-                        actions = []
-                        rewards = []
-                        suc_states = []
-                        terminals = []
-                    else:
-                        statistics["successful_network_update"].append(False)
-
-                # update exploration probability
-                self.exploration_probability = max(
-                    self.exploration_probability * self.exploration_update_factor,
-                    self.exploration_probability_end)
-
-                # try how far we get with the current model.
-                # take last stable state as new starting point
-                if run_number % self.runs_before_advancing_start == 0:
-                    self.interface.set_status("Advancing Start Position!")
-                    self.world.last_action = None
-
-                    try:
-                        new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
-                            self.run_until_terminal(0)
-                    except TerminalStateError:
-                        break
-
-                    if run_steps:
-                        [states.append(s) for s in new_states]
-                        [actions.append(a) for a in new_actions]
-                        [rewards.append(r) for r in new_rewards]
-                        [suc_states.append(s) for s in new_suc_states]
-                        [terminals.append(t) for t in new_terminals]
-
-                        # collect statistics
-                        statistics["advancing_steps"].append(run_steps)
-                        statistics["advancing_rewards"].append(run_reward)
-
-                    if self.world.is_at_goal():
-                        self.world.reset_current_start_pose()
-                        self.world.reset()
-                    else:
-                        self.world.update_current_start_pose()
-                    # self.world.deactivate()
-                    self.interface.set_status("Advanced start by ", run_steps, " steps")
-
-                # reset to start pose and see how far we get
-                # if we don't get better at this, we might consider measures like resetting to the last network
-                # that worked best or boosting exploration
-                if run_number % self.runs_before_testing_from_start == 0:
-
+                try:
                     # reset to start
+                    self.world.reset(True)
+
+                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                        self.run_until_terminal(0)
+                except (UntreatableStateError, IllegalPoseException):
+                    break
+
+                if run_steps:
+                    [states.append(s) for s in new_states]
+                    [actions.append(a) for a in new_actions]
+                    [rewards.append(r) for r in new_rewards]
+                    [suc_states.append(s) for s in new_suc_states]
+                    [terminals.append(t) for t in new_terminals]
+
+                    statistics["testing_steps"] = run_steps
+                    statistics["testing_rewards"] = run_reward
+
+                    if run_steps > best_test_steps and run_steps >= self.min_steps_before_model_save:
+                        self.model.save_weights(os.path.join(self.experiment_directory,
+                                                             'weights_' + str(run_number+1) + '_' +
+                                                             str(run_steps) + '.h5'))
+                else:
+                    statistics["testing_steps"] = 0
+                    statistics["testing_rewards"] = ""
+
+                if self.world.is_at_goal():
+                    # once the wire is learned successfully, stop training
                     self.world.reset_current_start_pose()
-
+                    self.model.save_weights(os.path.join(self.experiment_directory, 'weights_' + str(run_number+1)
+                                                         + str(run_steps) + '_goal.h5'))
+                    self.interface.set_status("Successfully completed wire!")
+                    self.stop_training()
                     try:
-                        new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
-                            self.run_until_terminal(0)
-                    except TerminalStateError:
-                        break
-
-                    if run_steps:
-                        [states.append(s) for s in new_states]
-                        [actions.append(a) for a in new_actions]
-                        [rewards.append(r) for r in new_rewards]
-                        [suc_states.append(s) for s in new_suc_states]
-                        [terminals.append(t) for t in new_terminals]
-
-                        statistics["testing_steps"].append(run_steps)
-                        statistics["testing_rewards"].append(run_reward)
-
-                        if run_steps > best_test_steps and run_steps >= self.min_steps_before_model_save:
-                            self.model.save_weights(self.model.save_weights(os.path.join(self.experiment_directory,
-                                                                                         'weights_' + str(run_number)
-                                                                                         + str(run_steps) + '.h5')))
-
-                    if self.world.is_at_goal():
-                        # once the wire is learned successfully, stop training
-                        self.world.reset_current_start_pose()
                         self.world.reset()
-                        self.model.save_weights(os.path.join(self.experiment_directory, 'weights_' + str(run_number)
-                                                             + str(run_steps) + '_goal.h5'))
-                        self.interface.set_status("Successfully completed wire!")
+                    except IllegalPoseException:
+                        # training is stopped anyways
+                        pass
+                else:
+                    self.world.update_current_start_pose()
+
+                self.interface.update_test_steps(run_number+1, run_steps)
+
+
+            # try how far we get with the current model.
+            # take last stable state as new starting point
+            if run_number % self.runs_before_advancing_start == 0 and not self.stop:
+                self.interface.set_status("Advancing Start Position without Exploration")
+
+                try:
+                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                        self.run_until_terminal(0)
+                except UntreatableStateError:
+                    break
+
+                if run_steps:
+                    [states.append(s) for s in new_states]
+                    [actions.append(a) for a in new_actions]
+                    [rewards.append(r) for r in new_rewards]
+                    [suc_states.append(s) for s in new_suc_states]
+                    [terminals.append(t) for t in new_terminals]
+
+                    # collect statistics
+                    statistics["advancing_steps"] = run_steps
+                    statistics["advancing_rewards"] = run_reward
+                else:
+                    statistics["advancing_steps"] = 0
+                    statistics["advancing_rewards"] = ""
+
+                if self.world.is_at_goal():
+                    self.world.reset_current_start_pose()
+                    try:
+                        self.world.reset()
+                    except IllegalPoseException:
                         self.stop_training()
-                    else:
-                        self.world.update_current_start_pose()
+                else:
+                    self.world.update_current_start_pose()
+                # self.world.deactivate()
+                self.interface.set_status("Advanced start by ", run_steps, " steps")
 
-                    self.interface.update_test_steps(run_number, run_steps)
+            # train neural network after collecting some experience
+            if run_number % self.runs_before_update == 0 and not self.stop:
+                if self.trainer.is_done_training() and len(states):
+                    self.interface.set_status("Update Network: Success")
+                    statistics["successful_network_update"] = 1
+                    logging.debug("Replace NN and start new training")
 
-                    self.interface.set_status(run_steps, "steps from start position")
+                    self.model.load_weights(self.weights_file)
+                    Thread(target=self.trainer.train,
+                           args=(states, actions, rewards, suc_states, terminals)).start()
 
-                run_number += 1
+                    training_number += 1
 
-        statistics_file = os.path.join(self.experiment_directory, 'statistics.csv')
+                    # clear experience collection
+                    states = []
+                    actions = []
+                    rewards = []
+                    suc_states = []
+                    terminals = []
+                else:
+                    self.interface.set_status("Update Network: Failed")
+                    statistics["successful_network_update"] = 0
 
-        cols = max([len(vals) for vals in statistics.values()])
+            run_steps = 0
 
-        for key in statistics.keys():
-            [statistics[key].append('') for _ in range(len(statistics[key]), cols)]
+            while not run_steps and not self.stop:
+                # try to record a run
+                # this is needed, because if for some reason the run_number isn't advanced, the testing, training or
+                #  advancing section might be run over and over
 
-        with open(statistics_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(statistics.keys())
-            writer.writerows(zip(*statistics.values()))
+                try:
+                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                        self.run_until_terminal(self.exploration_probability)
+                except UntreatableStateError:
+                    # needed to properly abort training because break will just break out of one while-loop
+                    self.stop_training()
+                    break
+
+                if run_steps:
+                    [states.append(s) for s in new_states]
+                    [actions.append(a) for a in new_actions]
+                    [rewards.append(r) for r in new_rewards]
+                    [suc_states.append(s) for s in new_suc_states]
+                    [terminals.append(t) for t in new_terminals]
+
+                    # plot
+                    self.interface.update_steps(run_number+1, run_steps)
+                    self.interface.update_exploration(run_number+1, self.exploration_probability)
+
+                    # collect statistics
+                    statistics["steps"] = run_steps
+                    statistics["rewards"] = run_reward
+                    statistics["exploration_probability"] = self.exploration_probability
+
+                    # update exploration probability
+                    self.exploration_probability = max(
+                        self.exploration_probability * self.exploration_update_factor,
+                        self.exploration_probability_end)
+
+                    run_number += 1
+
+            statistics_string = ""
+
+            for key in statistics_keys:
+                statistics_string += str(statistics[key]) + ","
+
+            # remove last comma
+            statistics_string = statistics_string[:-1]
+
+            with open(statistics_file, 'a') as f:
+                f.write(statistics_string)
+                f.write("\n")
+
+        while self.interface.t.isAlive():
+            pass
+
+    def start_training(self):
+        self.start = True
 
     def stop_training(self):
         self.stop = True
@@ -279,9 +316,9 @@ class DeepQNetworkAgent(object):
         # assumes world to be in nonterminal state, as promised by RealWorld
         terminal = False
 
-        state = self.world.observe_state()
-
         while not terminal:
+
+            state = self.world.observe_state()
 
             q_values = self.model.predict(np.expand_dims(state, axis=0))
 
@@ -304,29 +341,49 @@ class DeepQNetworkAgent(object):
             try:
                 suc_state, reward, terminal = self.world.execute(action)
 
-                if suc_state is not None and reward is not None and terminal is not None:
-                    states.append(state)
-                    actions.append(action)
-                    rewards.append(reward)
-                    suc_states.append(suc_state)
-                    terminals.append(terminal)
+            except SpawnedInTerminalStateError:
+                # last action apperantly led to undetected nonterminal state
+                # correct last experience
+                if len(states):
+                    run_reward -= rewards[-1]
+                    rewards[-1] = self.world.PUNISHMENT_WIRE
+                    run_reward += rewards[-1]
 
-                    state = suc_state
+                    terminals[-1] = True
+                break
+            except ExitedInTerminalStateError:
+                # something went wrong when trying to reset to nonterminal state.
+                # this also means, that suc_state is terminal
 
-                    # collect stats
-                    run_steps += 1
-                    run_reward += reward
-
-            except TerminalStateError:
+                # just copy state (suc_state not needed for DQN when terminal anyways)
+                suc_state = state
+                reward = self.world.PUNISHMENT_WIRE
+                terminal = True
+            except UntreatableStateError:
                 # Abort everything
                 self.interface.set_status("Robot stuck in Terminal State. Abort training.")
-                self.stop_training()
-                break
+                raise
             except InsufficientProgressError:
                 self.interface.set_status("Insufficient Progress. Aborting Run.")
+                if len(states):
+                    run_reward -= rewards[-1]
+                    rewards[-1] = self.world.PUNISHMENT_INSUFFICIENT_PROGRESS
+                    run_reward += rewards[-1]
+
+                break
+            except IllegalPoseException:
+                self.stop_training()
                 break
 
-        # self.world.deactivate()
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            suc_states.append(suc_state)
+            terminals.append(terminal)
+
+            # collect stats
+            run_steps += 1
+            run_reward += reward
 
         return states, actions, rewards, suc_states, terminals, run_steps, run_reward
 

@@ -6,9 +6,9 @@ import numpy as np
 import tensorflow as tf
 from pyfirmata import Arduino, util
 
-import Cense.NeuralNetworkFactory.nnFactory as factory
+import Cense.Agent.NeuralNetworkFactory.nnFactory as factory
 # import Cense.NeuralNetworkFactory.nnFactory as factory
-from Cense.World.Camera.camera_videocapture import Camera
+from Cense.Environment.Camera.camera_videocapture import Camera
 
 
 def save_array():

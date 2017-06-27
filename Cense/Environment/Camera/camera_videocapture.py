@@ -2,7 +2,6 @@ from VideoCapture import Device
 
 import numpy as np
 from scipy.misc import imresize
-import matplotlib.pyplot as plt
 
 
 class Camera(object):
@@ -14,7 +13,7 @@ class Camera(object):
         self.set_status_func = set_status_func
         self.set_status_func("Setup Camera")
 
-        self.__camera = Device(0)
+        self.__camera = Device(1)
         self.SIZE = size
 
     def capture_image(self):
@@ -32,6 +31,8 @@ class Camera(object):
         return imresize(gray, self.SIZE) / 255
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+
     cam = Camera((40, 40), print)
 
     state = cam.capture_image()

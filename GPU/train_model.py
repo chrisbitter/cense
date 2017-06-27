@@ -97,7 +97,7 @@ class Training(object):
 
     root_folder = "/home/useradmin/Dokumente/rm505424/CENSE/Christian/"
 
-    train_parameters = root_folder + "train_parameters.json"
+    train_parameters = root_folder + "train_params.json"
 
     model_file = root_folder + "model/model.json"
     weights_file = root_folder + "model/weights.h5"
@@ -130,9 +130,13 @@ class Training(object):
         else:
             raise MissingFileException("Missing file: Weights")
 
-        if self.config["use_target"] and os.path.isfile(self.target_weights_file):
-            self.target_model.load_weights(self.target_weights_file)
-            self.use_target = True
+        self.use_target = self.config["use_target"]
+
+        if self.use_target:
+            if os.path.isfile(self.target_weights_file):
+                self.target_model.load_weights(self.target_weights_file)
+            else:
+                self.target_model.load_weights(self.weights_file)
 
         # Load data
         # Load old data
@@ -176,9 +180,8 @@ class Training(object):
             f.create_dataset('suc_states', data=self.suc_states)
             f.create_dataset('terminals', data=self.terminals)
 
-    
         # training
-    
+
         epochs = self.config["epochs"]
         batch_size = self.config["batch_size"]
         discount_factor = self.config["discount_factor"]
@@ -199,8 +202,10 @@ class Training(object):
                 minibatch = np.random.choice(self.experience_buffer, size=batch_size)
 
                 # inputs are the states
-                states = np.array([self.states[i] for i in minibatch])  # 30, 20, 20
-                batch_targets = self.model.predict_on_batch(states)  # 30, 5
+                batch_states = np.array([self.states[i] for i in minibatch])  # 30, 20, 20
+                batch_targets = self.model.predict_on_batch(batch_states)  # 30, 5
+
+                batch_actions = np.array([self.actions[i] for i in minibatch])
 
                 # print("Batch targets Q-Network:\n", batch_targets)
 
@@ -221,22 +226,24 @@ class Training(object):
                 argmax_Q_suc = np.argmax(Q_suc, axis=1)
                 # print("argmax Q-Values for successor states\n", argmax_Q_suc)
 
-                batch_targets[range(batch_size), argmax_Q_suc] = max_Q_suc + batch_rewards
+                batch_targets[range(batch_size), batch_actions] = max_Q_suc + batch_rewards
                 # print("final targets:\n", batch_targets)
 
-                self.model.train_on_batch(states, batch_targets)
+                self.model.train_on_batch(batch_states, batch_targets)
 
                 if self.use_target:
                     # update target network
                     model_weights = self.model.get_weights()
                     target_weights = self.target_model.get_weights()
                     for i in range(len(model_weights)):
-                        target_weights[i] = target_update_rate * model_weights[i] + (1 - target_update_rate) * target_weights[i]
+                        target_weights[i] = target_update_rate * model_weights[i] + (1 - target_update_rate) * \
+                                                                                    target_weights[i]
                     self.target_model.set_weights(target_weights)
 
         self.model.save_weights(self.weights_file)
         if self.use_target:
             self.target_model.save_weights(self.target_weights_file)
+
 
 if __name__ == "__main__":
 

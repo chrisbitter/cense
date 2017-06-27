@@ -35,28 +35,34 @@ class Visualizer(object):
         print("show")
         fig = plt.figure(0)
 
-        rows = 10
-        cols = 10
+        rows = 1
+        cols = 1
+
+        ii = 1
 
         for index in range(len(self.states)//(rows*cols)):
             for row in range(rows):
                 for col in range(cols):
-                    plt.subplot(rows, 2*cols, 2*col + row*cols + 1)
+                    plt.subplot(rows, cols, col + row*cols + 1)
                     plt.axis('off')
                     plt.imshow(self.states[index*rows*cols + col + row*cols], cmap='gray').norm.vmax = 1
 
-                    plt.subplot(rows, 2*cols, 2 * col + row * cols + 2)
-                    plt.axis('off')
-                    if not self.terminals[index]:
-                        plt.imshow(self.suc_states[index], cmap='gray').norm.vmax = 1
-                    else:
-                        plt.imshow(np.ones(self.suc_states[index*rows*cols + col + row*cols].shape), cmap='gray').norm.vmax = 1
+                    #plt.imsave(, arr=self.states[index*rows*cols + col + row*cols])
+
+                    #ii += 1
+
+                    # plt.subplot(rows, 2*cols, 2 * col + row * cols + 2)
+                    # plt.axis('off')
+                    # if not self.terminals[index]:
+                    #     plt.imshow(self.suc_states[index], cmap='gray').norm.vmax = 1
+                    # else:
+                    #     plt.imshow(np.ones(self.suc_states[index*rows*cols + col + row*cols].shape), cmap='gray').norm.vmax = 1
 
             #plt.tight_layout()
             plt.draw()
             plt.pause(.001)
 
-            time.sleep(1)
+
 
 if __name__ == "__main__":
     vis = Visualizer()

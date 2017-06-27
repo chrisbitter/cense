@@ -13,22 +13,29 @@ import sys
 import threading
 import time
 
-import Cense.World.Robot.rtde.rtde_config as rtde_config
+import Cense.Environment.Robot.rtde.rtde_config as rtde_config
 import numpy as np
 
-from Cense.World.Loop.loop import Loop
-from Cense.World.Robot.rtde.rtde_py3 import RTDE
+from Cense.Environment.Loop.loop import Loop
+from Cense.Environment.Robot.rtde.rtde_py3 import RTDE
 
 
 class IllegalPoseException(Exception):
     def __init__(self, *args):
-        super(self, *args)
+        super(IllegalPoseException, self).__init__(*args)
 
 
 class TerminalStateError(Exception):
     def __init__(self, *args):
-        super(self, *args)
+        super(TerminalStateError, self).__init__(*args)
 
+class SpawnedInTerminalStateError(TerminalStateError):
+    def __init__(self, *args):
+        super(SpawnedInTerminalStateError, self).__init__(*args)
+
+class ExitedInTerminalStateError(TerminalStateError):
+    def __init__(self, *args):
+        super(ExitedInTerminalStateError, self).__init__(*args)
 
 class RtdeController(object):
     # begin variable and object setup
@@ -43,8 +50,8 @@ class RtdeController(object):
 
     keep_running = True
 
-    CONSTRAINT_MIN = np.array([-.24, -.38, .2])
-    CONSTRAINT_MAX = np.array([.33, -.27, .68])
+    CONSTRAINT_MIN = np.array([-.19, -.38, .17])
+    CONSTRAINT_MAX = np.array([.33, -.27, .7])
 
     connection = None
 
@@ -113,10 +120,10 @@ class RtdeController(object):
 
             logging.debug("Controller - current_pose")
 
-            state = self.connection.receive()
+            state = None
 
-            if state is None:
-                return None, touching_wire
+            while state is None:
+                state = self.connection.receive()
 
             return np.array(state.__dict__[b'actual_TCP_pose']), touching_wire
 
@@ -128,12 +135,13 @@ class RtdeController(object):
             if target_pose[0] < self.CONSTRAINT_MIN[0] or target_pose[0] > self.CONSTRAINT_MAX[0] \
                     or target_pose[1] < self.CONSTRAINT_MIN[1] or target_pose[1] > self.CONSTRAINT_MAX[1] \
                     or target_pose[2] < self.CONSTRAINT_MIN[2] or target_pose[2] > self.CONSTRAINT_MAX[2]:
+                print("Illegal Pose!")
                 raise IllegalPoseException
 
-            state = self.connection.receive()
+            state = None
 
-            if state is None:
-                raise ConnectionError
+            while state is None:
+                state = self.connection.receive()
 
             start_pose = np.array(state.__dict__[b'actual_TCP_pose'])
 
@@ -141,24 +149,25 @@ class RtdeController(object):
                 self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = target_pose[i]
 
             if self.loop.is_touching_wire() and not force:
-                raise TerminalStateError
+                raise SpawnedInTerminalStateError
 
             timestamp = time.time()
 
-            self.connection.send(self.target_pose)
-
             touched_wire = False
             while True:
-                state = self.connection.receive()
 
                 if self.loop.has_touched_wire(timestamp):
                     touched_wire = True
                     if not force:
                         break
 
+                self.connection.send(self.target_pose)
+                state = self.connection.receive()
+
                 max_translation_deviation = np.max(
                     np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - target_pose[:3]))
-                max_rotation_deviation = np.max(np.absolute(state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]))
+                max_rotation_deviation = np.max(np.absolute(state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]))\
+                                         % (2*np.pi)
 
                 if max_translation_deviation < self.ERROR_TRANSLATION and max_rotation_deviation < self.ERROR_ROTATION:
                     break
@@ -170,17 +179,21 @@ class RtdeController(object):
                 for i in range(6):
                     self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = start_pose[i]
 
-                self.connection.send(self.target_pose)
-
                 while True:
+                    self.connection.send(self.target_pose)
                     state = self.connection.receive()
                     max_translation_deviation = np.max(
                         np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - start_pose[:3]))
                     max_rotation_deviation = np.max(
-                        np.absolute(state.__dict__[b'actual_TCP_pose'][3:] - start_pose[3:]))
+                        np.absolute(state.__dict__[b'actual_TCP_pose'][3:] - start_pose[3:])) % (2 * np.pi)
+
                     if max_translation_deviation < self.ERROR_TRANSLATION \
                             and max_rotation_deviation < self.ERROR_ROTATION:
                         break
+
+            # this function is supposed to ensure that the state is nonterminal
+            if self.loop.is_touching_wire() and not force:
+                raise ExitedInTerminalStateError
 
             return touched_wire
 

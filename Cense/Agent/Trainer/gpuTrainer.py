@@ -1,9 +1,10 @@
-import paramiko
-import h5py
 # paramiko.util.log_to_file('/tmp/paramiko.log')
 import json
-import os
 import logging
+import os
+
+import h5py
+import paramiko
 
 
 class GpuTrainer(object):
@@ -237,7 +238,7 @@ if __name__ == "__main__":
 
     gpu = GpuTrainer(os.path.join(os.getcwd(), "..", "..", ""), print)
 
-    import Cense.NeuralNetworkFactory.nnFactory as Factory
+    import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
     import numpy as np
 
     model = Factory.model_simple_conv((50, 50), 6)

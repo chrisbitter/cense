@@ -1,13 +1,13 @@
 {
   "collector": {
-    "resume_training": 0,
+    "resume_training": 1,
     "exploration_probability_start": 1,
     "exploration_probability_end": 0.1,
-    "exploration_probability_runs_until_end": 500,
+    "exploration_probability_runs_until_end": 200,
     "exploration_probability_boost_runs_until_end": 50,
-    "runs_before_update": 10,
-    "runs_before_advancing_start": 30,
-    "runs_before_testing_from_start": 100,
+    "runs_before_update": 20,
+    "runs_before_advancing_start": 10,
+    "runs_before_testing_from_start": 25,
     "min_steps_before_model_save": 10
   },
   "trainer": {
@@ -16,7 +16,7 @@
     "batch_size_start": 25,
     "batch_size_end": 100,
     "trainings_before_param_update": 5,
-    "trainings_until_end_config": 50,
+    "trainings_until_end_config": 25,
     "trainings_without_target": 3,
     "discount_factor": 0.99,
     "target_update_rate": 0.01,
@@ -41,5 +41,21 @@
       "script_remote": "train_model.py",
       "test_script_remote": "test_model.py"
     }
+  },
+  "environment": {
+
+    "checkpoint_distance": 0.03,
+
+    "punishment_wire": -1,
+    "punishment_insufficient_progress": -0.5,
+    "punishment_old_checkpoint": -0.5,
+    "reward_goal": 1,
+    "reward_new_checkpoint": 1,
+    "reward_generic": -0.1,
+
+    "step_watchdog": 10,
+
+    "translation_distance": 0.01,
+    "rotation_angle": 30
   }
 }

@@ -4,7 +4,7 @@ from threading import Thread, Lock
 import numpy as np
 import tensorflow as tf
 
-from Cense.NeuralNetworkFactory.nnFactory import model_dueling
+from Cense.Agent.NeuralNetworkFactory.nnFactory import model_dueling
 from Resources.misc.keras_thread.trainer import Trainer
 
 
