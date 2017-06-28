@@ -166,8 +166,8 @@ class RtdeController(object):
 
                 max_translation_deviation = np.max(
                     np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - target_pose[:3]))
-                max_rotation_deviation = np.max(np.absolute(state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]))\
-                                         % (2*np.pi)
+                max_rotation_deviation = np.max(np.absolute(((np.array(
+                    state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % 2*np.pi) - np.pi))
 
                 if max_translation_deviation < self.ERROR_TRANSLATION and max_rotation_deviation < self.ERROR_ROTATION:
                     break
@@ -184,8 +184,8 @@ class RtdeController(object):
                     state = self.connection.receive()
                     max_translation_deviation = np.max(
                         np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - start_pose[:3]))
-                    max_rotation_deviation = np.max(
-                        np.absolute(state.__dict__[b'actual_TCP_pose'][3:] - start_pose[3:])) % (2 * np.pi)
+                    max_rotation_deviation = np.max(np.absolute(((np.array(
+                        state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % 2 * np.pi) - np.pi))
 
                     if max_translation_deviation < self.ERROR_TRANSLATION \
                             and max_rotation_deviation < self.ERROR_ROTATION:
