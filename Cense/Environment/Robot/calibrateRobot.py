@@ -7,6 +7,12 @@ import matplotlib.patches as patches
 
 controller = RtdeController(print)
 
+try:
+    pose, _ = controller.current_pose()
+    controller.move_to_pose(pose)
+except:
+    pass
+
 fig1 = plt.figure()
 
 ax1 = fig1.add_subplot(121, aspect='equal')
@@ -51,6 +57,7 @@ while True:
     pose = list(pose[0][:3])
 
     print("Pose:", pose)
+    print("At Goal:", pose[0] < RealEnvironment.GOAL_X)
 
     position_xz_plot.set_xdata(pose[0])
     position_xz_plot.set_ydata(pose[2])

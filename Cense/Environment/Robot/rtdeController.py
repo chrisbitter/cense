@@ -46,12 +46,17 @@ class RtdeController(object):
     RTDE_PROTOCOL_VERSION = 1
 
     ERROR_TRANSLATION = .001
-    ERROR_ROTATION = .5 * np.pi / 180
+    ERROR_ROTATION = 1 * np.pi / 180
 
     keep_running = True
 
-    CONSTRAINT_MIN = np.array([-.19, -.38, .17])
-    CONSTRAINT_MAX = np.array([.33, -.27, .7])
+    # CONSTRAINT_MIN = np.array([-.19, -.38, .17])
+    # CONSTRAINT_MAX = np.array([.33, -.27, .7])
+
+    CONSTRAINT_MIN = np.array([-.19, -.38, .07])
+    CONSTRAINT_MAX = np.array([.33, -.27, .8])
+
+    SPEED_FRACTION = .7
 
     connection = None
 
@@ -110,6 +115,12 @@ class RtdeController(object):
         self.target_pose.input_double_register_4 = 0
         self.target_pose.input_double_register_5 = 0
 
+        self.target_pose.speed_slider_mask = 1
+        self.target_pose.speed_slider_fraction = 0.1
+
+        self.target_pose.__dict__[b'speed_slider_mask'] = 1
+        self.target_pose.__dict__[b'speed_slider_fraction'] = self.SPEED_FRACTION
+
         self.abort_signal.input_int_register_0 = 0
 
         self.connection.send_start()
@@ -164,12 +175,12 @@ class RtdeController(object):
                 self.connection.send(self.target_pose)
                 state = self.connection.receive()
 
-                max_translation_deviation = np.max(
+                translation_deviation = np.sum(
                     np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - target_pose[:3]))
-                max_rotation_deviation = np.max(np.absolute(((np.array(
-                    state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % 2*np.pi) - np.pi))
+                rotation_deviation = np.sum(np.absolute(((np.array(
+                    state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % (2*np.pi)) - np.pi))
 
-                if max_translation_deviation < self.ERROR_TRANSLATION and max_rotation_deviation < self.ERROR_ROTATION:
+                if translation_deviation < self.ERROR_TRANSLATION and rotation_deviation < self.ERROR_ROTATION:
                     break
 
             if (touched_wire or self.loop.has_touched_wire(timestamp)) and not force:
@@ -182,13 +193,13 @@ class RtdeController(object):
                 while True:
                     self.connection.send(self.target_pose)
                     state = self.connection.receive()
-                    max_translation_deviation = np.max(
+                    translation_deviation = np.sum(
                         np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - start_pose[:3]))
-                    max_rotation_deviation = np.max(np.absolute(((np.array(
-                        state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % 2 * np.pi) - np.pi))
+                    rotation_deviation = np.sum(np.absolute(((np.array(
+                        state.__dict__[b'actual_TCP_pose'][3:] - start_pose[3:]) + np.pi) % (2*np.pi)) - np.pi))
 
-                    if max_translation_deviation < self.ERROR_TRANSLATION \
-                            and max_rotation_deviation < self.ERROR_ROTATION:
+                    if translation_deviation < self.ERROR_TRANSLATION \
+                            and rotation_deviation < self.ERROR_ROTATION:
                         break
 
             # this function is supposed to ensure that the state is nonterminal
@@ -207,18 +218,37 @@ class RtdeController(object):
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.DEBUG)
 
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+
     con = RtdeController(print)
 
-    timeout = 10
     rotation = 30 * np.pi / 180
+    # rotation *= -1
 
-    for _ in range(10):
+    x = []
+    y = []
+
+
+    for i in range(1000):
+        now = time.time()
         pose, _ = con.current_pose()
         pose[4] += rotation
         con.move_to_pose(pose)
 
+        execution_time = time.time()-now
+
         rotation *= -1
 
-        now = time.time()
-        while time.time() - now < timeout:
+        x.append(i)
+        y.append(execution_time)
+
+        plt.plot(x, y)
+        plt.draw()
+        plt.pause(0.001)
+
+        timeout = time.time() + 5
+        while time.time() < timeout:
             pass
+
+

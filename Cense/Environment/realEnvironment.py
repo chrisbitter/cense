@@ -20,7 +20,7 @@ class RealEnvironment(object):
     Y_ENGAGED = -.35
 
     START_POSE = np.array([.3, Y_ENGAGED, .448, 0, np.pi / 2, 0])
-    PREVIOUS_START_POSE = START_POSE
+    #PREVIOUS_START_POSE = START_POSE
 
     CURRENT_START_POSE = START_POSE
     GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
@@ -50,6 +50,8 @@ class RealEnvironment(object):
 
         self.STEP_WATCHDOG = environment_config["step_watchdog"]
 
+        self.AMNT_TO_PUNISH_AT_INSUFFICIENT = int(environment_config["fraction_to_punish_at_insufficient"] * self.STEP_WATCHDOG)
+
         self.TRANSLATION_DISTANCE = environment_config["translation_distance"]
         self.ROTATION_ANGLE = environment_config["rotation_angle"] * np.pi / 180
 
@@ -69,17 +71,16 @@ class RealEnvironment(object):
     def reset_stepwatchdog(self):
         self.CURRENT_STEP_WATCHDOG = self.STEP_WATCHDOG
 
-    def execute(self, action, force=False):
+    def execute(self, action):
         logging.debug("Real Environment - execute")
 
-        if not force:
-            if self.CURRENT_STEP_WATCHDOG == 0:
-                self.reset()
-                raise InsufficientProgressError
-            else:
-                self.CURRENT_STEP_WATCHDOG -= 1
+        if self.CURRENT_STEP_WATCHDOG == 0:
+            self.reset_stepwatchdog()
+            raise InsufficientProgressError
+        else:
+            self.CURRENT_STEP_WATCHDOG -= 1
 
-        next_pose, touching_wire = self.controller.current_pose()
+        next_pose, _ = self.controller.current_pose()
 
         # all movements relative to TCP orientation
         # backwards movement disabled
@@ -107,7 +108,7 @@ class RealEnvironment(object):
         terminal = False
 
         try:
-            touched_wire = self.controller.move_to_pose(next_pose, force)
+            touched_wire = self.controller.move_to_pose(next_pose)
 
             if touched_wire:
                 reward = self.PUNISHMENT_WIRE
@@ -133,9 +134,8 @@ class RealEnvironment(object):
             return state, reward, terminal
 
         except IllegalPoseException:
-            # should never occur with current setup!
             raise
-        except (SpawnedInTerminalStateError, ExitedInTerminalStateError) as e:
+        except (SpawnedInTerminalStateError, ExitedInTerminalStateError):
             try:
                 self.reset()
             except UntreatableStateError:
@@ -202,21 +202,27 @@ class RealEnvironment(object):
             raise
 
         pose[1] = self.Y_ENGAGED
+
+        reset_failed = False
+
         try:
             touched_wire = self.controller.move_to_pose(pose)
 
-            if touched_wire and (self.CURRENT_START_POSE != self.START_POSE).any():
-                self.reset(True)
+            if touched_wire:
+                reset_failed = True
 
-        except (SpawnedInTerminalStateError, ExitedInTerminalStateError) as e:
-            if (self.CURRENT_START_POSE != self.START_POSE).any():
-                # try hard reset
-                self.reset(True)
-            else:
-                # if hard reset didn't manage to get to a nonterminal state, something went seriously wrong!
-                raise UntreatableStateError
+        except (SpawnedInTerminalStateError, ExitedInTerminalStateError):
+            reset_failed = True
         except IllegalPoseException:
             raise
+
+        if reset_failed:
+            if (self.CURRENT_START_POSE != self.START_POSE).any():
+                # try hard reset
+                self.reset(hard_reset=True)
+            else:
+                # reset didn't manage to get to a nonterminal state, something went seriously wrong!
+                raise UntreatableStateError
 
         # reset checkpoints
         self.__checkpoints = [self.CURRENT_START_POSE[:3]]
@@ -229,20 +235,37 @@ class RealEnvironment(object):
         current_pose, touching_wire = self.controller.current_pose()
 
         if not touching_wire:
-            self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
+            #self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
             self.CURRENT_START_POSE = current_pose
         else:
-            logging.info("Not updating start pose because loop is touching the wire")
+            print("Not updating start pose because loop is touching the wire")
 
     def reset_current_start_pose(self):
         logging.debug("Real Environment - reset_current_start_pose")
-        self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
+        #self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
         self.CURRENT_START_POSE = self.START_POSE
 
 
 if __name__ == "__main__":
     # logging.getLogger().setLevel(logging.DEBUG)
 
-    world = RealEnvironment(print)
+    config = {
 
-    world.execute(3)
+    "checkpoint_distance": 0.03,
+
+    "punishment_wire": -1,
+    "punishment_insufficient_progress": -0.5,
+    "punishment_old_checkpoint": -0.5,
+    "reward_goal": 1,
+    "reward_new_checkpoint": 1,
+    "reward_generic": -0.1,
+
+    "step_watchdog": 10,
+
+    "translation_distance": 0.01,
+    "rotation_angle": 30
+  }
+
+    world = RealEnvironment(config, print)
+
+    #world.execute(3)

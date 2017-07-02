@@ -28,6 +28,8 @@ class Loop:
         analog_0 = board.get_pin('a:0:i')
         analog_1 = board.get_pin('a:1:i')
 
+        tic = time.time()
+
         while True:
             value_a0 = analog_0.read()
             value_a1 = analog_1.read()
@@ -37,6 +39,10 @@ class Loop:
                     self.timestamp_touched = time.time()
                 else:
                     self.timestamp_not_touched = time.time()
+                tic = time.time()
+
+            if time.time() - tic > 1:
+                print("Loop Thread slow")
 
             time.sleep(.01)
 

@@ -270,9 +270,16 @@ def dummy_callback():
 
 if __name__ == "__main__":
 
-    vis = Interface(dummy_callback, dummy_callback, dummy_callback)
+    interface = Interface(dummy_callback, dummy_callback, dummy_callback)
 
     time.sleep(2)
 
-    for t in range(500):
-        vis.set_status(t)
+    for t in range(1, 1000):
+        interface.update_steps(t, np.random.random())
+        interface.update_state(np.random.rand(40, 40))
+        interface.update_exploration(t, 1/(t+1))
+        if t % 10 == 0:
+            interface.update_test_steps(t, np.random.random()*t)
+        interface.update_q_value(np.random.rand(5), np.random.randint(5), 'g')
+        time.sleep(.01)
+

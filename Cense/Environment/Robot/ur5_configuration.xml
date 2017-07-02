@@ -2,7 +2,6 @@
 <rtde_config>
 	<recipe key="state">
 		<field name="actual_TCP_pose" type="VECTOR6D"/>
-		<field name="actual_TCP_speed" type="VECTOR6D"/>
 	</recipe>
 
 	<recipe key="target_pose">
@@ -12,6 +11,8 @@
 		<field name="input_double_register_3" type="DOUBLE"/>
 		<field name="input_double_register_4" type="DOUBLE"/>
 		<field name="input_double_register_5" type="DOUBLE"/>
+		<field name="speed_slider_mask" type="UINT32"/>
+		<field name="speed_slider_fraction" type="DOUBLE"/>
 	</recipe>
 
 	<recipe key="abort_signal">
