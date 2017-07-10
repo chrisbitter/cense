@@ -9,9 +9,9 @@ import numpy as np
 
 import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
 from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
-from Cense.Environment.realEnvironment import RealEnvironment as World
-from Cense.Environment.realEnvironment import *
-from Cense.Interface.pyqtgraphInterface import Interface as Interface
+from Cense.Environment.realEnvironment_acceleration import RealEnvironment as World
+from Cense.Environment.realEnvironment_acceleration import *
+from Cense.Interface.pyqtgraphInterface_acceleration import Interface as Interface
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -23,7 +23,7 @@ class DeepQNetworkAgent(object):
     model_file = "../../Resources/nn-data/model.json"
     weights_file = "../../Resources/nn-data/weights.h5"
     # trained_weights_file = "../../Resources/nn-data/trained_weights.h5"
-    train_parameters = "../../Resources/train_parameters_original.json"
+    train_parameters = "../../Resources/train_parameters_acceleration.json"
 
     data_storage = "../../Experiment_Data/"
 
@@ -67,7 +67,7 @@ class DeepQNetworkAgent(object):
 
         self.world = World(config["environment"], self.interface.set_status)
 
-        self.model = Factory.model_dueling_keras(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
+        self.model = Factory.model_acceleration_q(self.world.STATE_DIMENSIONS, self.world.VELOCITY_DIMENSIONS, self.world.ACTIONS)
 
         # if there's already a model, use it. Else create new model
         if collector_config["resume_training"] and os.path.isfile(self.weights_file):
@@ -83,6 +83,8 @@ class DeepQNetworkAgent(object):
             self.model.save_weights(self.weights_file)
 
         self.trainer = Trainer(config["trainer"], self.interface.set_status)
+
+        self.trainer.reset()
 
         self.trainer.send_model_to_gpu()
 
@@ -333,18 +335,23 @@ class DeepQNetworkAgent(object):
 
             self.interface.update_state(state)
 
-            q_values = self.model.predict(np.expand_dims(state, axis=0))
+            state[0] = np.expand_dims(state[0], axis=0)
+            state[1] = np.expand_dims(state[1], axis=0)
+
+            q_values = self.model.predict(state)
 
             if np.any(np.isnan(q_values)):
                 raise ValueError("Net is broken!")
 
-            # explore with exploration_probability, else exploit
-            if np.random.random() < exploration_probability:
-                action = np.random.randint(self.world.ACTIONS)
-            else:
-                action = np.argmax(q_values)
+            action = np.random.randint(self.world.ACTIONS[1], size=self.world.ACTIONS[0])
 
-            self.interface.update_q_value(q_values[0], action)
+            # explore with exploration_probability, else exploit
+            for i in range(self.world.ACTIONS[0]):
+                if np.random.random() >= exploration_probability:
+                    # exploit
+                    action[i] = np.argmax(q_values[0][i])
+
+            self.interface.update_velocity_plot(self.world.velocities, action)
 
             try:
                 suc_state, reward, terminal = self.world.execute(action)

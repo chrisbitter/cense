@@ -262,6 +262,8 @@ if __name__ == "__main__":
 
     "step_watchdog": 10,
 
+    "fraction_to_punish_at_insufficient": 0.5,
+
     "translation_distance": 0.01,
     "rotation_angle": 30
   }

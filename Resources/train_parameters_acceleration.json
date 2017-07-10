@@ -39,7 +39,7 @@
       "model_weights_remote": "training_data/model/weights.h5",
       "training_params_remote": "training_data/train_params.json",
 
-      "script_remote": "train_model_distance.py",
+      "script_remote": "train_model_acceleration.py",
       "test_script_remote": "test_model.py",
       "script_reset": "reset.py"
     }
@@ -58,7 +58,14 @@
     "step_watchdog": 10,
     "fraction_to_punish_at_insufficient": 0.4,
 
-    "translation_distance": 0.01,
-    "rotation_angle": 30
+    "translation_acceleration_forward": 0.005,
+    "translation_acceleration_sideways": 0.005,
+    "rotation_acceleration": 5,
+
+    "min_translation_velocity_forward": 0,
+    "max_translation_velocity_forward": 0.03,
+
+    "max_abs_translation_velocity_sideways": 0.02,
+    "max_abs_rotation_velocity": 45
   }
 }

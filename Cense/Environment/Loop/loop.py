@@ -62,5 +62,5 @@ if __name__ == "__main__":
     loop = Loop(print)
 
     while True:
-        print(loop.has_touched_wire())
+        print(loop.has_touched_wire(time.time()))
         input()

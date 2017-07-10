@@ -200,6 +200,9 @@ def model_dueling_keras(input_shape, output_dim):
 
 
 def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
+
+    num_outputs = np.prod(output_dim)
+
     # this part of the network processes the
     img_input = Input(shape=image_input_shape)
     image_layer = Reshape(image_input_shape + (1,))(img_input)
@@ -212,22 +215,23 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
     # this part takes care of the velocity input values
     vel_input = Input(shape=velocity_input_shape)
     vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
+    vel_layer = Flatten()(vel_layer)
 
 
     # here, the preprocessed image and the velocities are merged into one tensor
-    concat_layer = Concatenate([image_layer, vel_layer])
+    concat_layer = Concatenate()([image_layer, vel_layer])
 
 
     # advantage function of actions
     adv_layer = Dense(100, activation="relu")(concat_layer)
     adv_layer = Dense(50, activation="relu")(adv_layer)
-    adv_layer = Dense(output_dim, activation="tanh")(adv_layer)
+    adv_layer = Dense(num_outputs, activation="tanh")(adv_layer)
 
     # value of state
     val_layer = Dense(100, activation="relu")(concat_layer)
     val_layer = Dense(50, activation="relu")(val_layer)
     val_layer = Dense(1, activation="linear")(val_layer)
-    val_layer = RepeatVector(output_dim)(val_layer)
+    val_layer = RepeatVector(num_outputs)(val_layer)
     val_layer = Flatten()(val_layer)
     # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
     # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
@@ -237,67 +241,45 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
                     output_shape=lambda x: x[0])
     # q_layer = Activation(activation="tanh")(q_layer)
 
+    q_layer = Reshape(output_dim)(q_layer)
+
     model = Model(inputs=[img_input, vel_input], outputs=[q_layer])
 
     model.compile(loss='mse',
                   optimizer='adam',
                   metrics=['accuracy'])
 
-    return model
-
-
-def model_ac(input_shape, output_dim):
-    # Common Layers
-    input_layer = Input(shape=input_shape)
-    common_layer = Conv2D(30, (5, 5), input_shape=input_shape, activation="relu")(input_layer)
-    common_layer = MaxPooling2D(pool_size=(2, 2))(common_layer)
-    common_layer = Conv2D(15, (3, 3), activation="relu")(common_layer)
-    common_layer = MaxPooling2D(pool_size=(2, 2))(common_layer)
-    common_layer = Flatten()(common_layer)
-
-    pol_layer = Dropout(0.2)(common_layer)
-    pol_layer = Dense(128, activation="relu")(pol_layer)
-    pol_layer = Dense(50, activation="relu")(pol_layer)
-    pol_layer = Dense(output_dim, activation="tanh")(pol_layer)
-
-    val_layer = Dropout(0.2)(common_layer)
-    val_layer = Dense(128, activation="relu")(val_layer)
-    val_layer = Dense(50, activation="relu")(val_layer)
-    val_layer = Dense(1, activation="linear")(val_layer)
-    val_layer = RepeatVector(output_dim)(val_layer)
-    val_layer = Flatten()(val_layer)
-    # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
-    merge_layer = merge(inputs=[pol_layer, val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
-                        output_shape=lambda x: x[0])
-    merge_layer = Activation(activation="softmax")(merge_layer)
-
-    model = Model(inputs=[input_layer], outputs=[merge_layer])
-
-    model.compile(loss='mse',
-                  optimizer='adam',
-                  metrics=['accuracy'])
+    print(model.summary())
 
     return model
 
 
 if __name__ == "__main__":
-    model = model_dueling((28, 28, 1), 6)
 
-    X = np.random.random((10, 28, 28, 1)).astype('float32')
+    print(model_dueling_keras((40, 40), 5).summary())
+
+    model = model_acceleration_q((40, 40), (3,), 5)
+
+    X = np.random.random((10, 40, 40)).astype('float32')
+    V = np.random.random((10,3)).astype('float32')
 
     # y = np.random.random((100, 6, 1))
     # print(X.shape)
 
-    # X = X.reshape(len(X), 1, 28, 28).astype('float32')
+    # X = X.reshape(len(X), 1, 40, 40).astype('float32')
+
+    print(model.summary())
 
     for i in range(5):
-        X = np.random.random((100, 28, 28, 1)).astype('float32')
-        y = np.random.randint(2, (100, 6))
-        model.fit(X, y)
+        X = np.random.random((100, 40, 40)).astype('float32')
+        V = np.random.random((100,3)).astype('float32')
+        y = np.random.random((100, 5)).astype('float32')
+        model.fit(x=[X,V], y=y)
 
     for i in range(5):
-        X = np.random.random((100, 28, 28, 1)).astype('float32')
-        y = model.predict(X)
+        X = np.random.random((1, 40, 40)).astype('float32')
+        V = np.random.random((1,3)).astype('float32')
+        y = model.predict(x=[X,V])
         print(y.argmax(axis=1))
 
 

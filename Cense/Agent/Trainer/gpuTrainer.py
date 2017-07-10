@@ -75,6 +75,26 @@ class GpuTrainer(object):
 
         self.script_remote = gpu_settings["remote_data_root"] + gpu_settings["script_remote"]
         self.test_script_remote = gpu_settings["remote_data_root"] + gpu_settings["test_script_remote"]
+        self.script_reset = gpu_settings["remote_data_root"] + gpu_settings["script_reset"]
+
+    def reset(self):
+        # reset gpu
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(
+            paramiko.AutoAddPolicy())
+
+        ssh.connect(self.host, self.port, self.username, self.password)
+
+        command = "python " + self.script_reset
+        stdin, stdout, stderr = ssh.exec_command(command)
+
+        exit_status = stdout.channel.recv_exit_status()
+
+        if exit_status != 0:
+            print("Error: ", exit_status)
+            [print(err) for err in stderr.readlines()]
+
+        ssh.close()
 
     def train(self, states, actions, rewards, suc_states, terminals):
 
