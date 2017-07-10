@@ -199,6 +199,53 @@ def model_dueling_keras(input_shape, output_dim):
     return model
 
 
+def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
+    # this part of the network processes the
+    img_input = Input(shape=image_input_shape)
+    image_layer = Reshape(image_input_shape + (1,))(img_input)
+    image_layer = Conv2D(30, (5, 5), activation="relu")(image_layer)
+    # image_layer = MaxPooling2D(pool_size=(2, 2))(image_layer)
+    image_layer = Conv2D(15, (5, 5), activation="relu")(image_layer)
+    # image_layer = MaxPooling2D(pool_size=(2, 2))(image_layer)
+    image_layer = Flatten()(image_layer)
+
+    # this part takes care of the velocity input values
+    vel_input = Input(shape=velocity_input_shape)
+    vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
+
+
+    # here, the preprocessed image and the velocities are merged into one tensor
+    concat_layer = Concatenate([image_layer, vel_layer])
+
+
+    # advantage function of actions
+    adv_layer = Dense(100, activation="relu")(concat_layer)
+    adv_layer = Dense(50, activation="relu")(adv_layer)
+    adv_layer = Dense(output_dim, activation="tanh")(adv_layer)
+
+    # value of state
+    val_layer = Dense(100, activation="relu")(concat_layer)
+    val_layer = Dense(50, activation="relu")(val_layer)
+    val_layer = Dense(1, activation="linear")(val_layer)
+    val_layer = RepeatVector(output_dim)(val_layer)
+    val_layer = Flatten()(val_layer)
+    # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
+    # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
+
+    # merging advantage function and state value
+    q_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
+                    output_shape=lambda x: x[0])
+    # q_layer = Activation(activation="tanh")(q_layer)
+
+    model = Model(inputs=[img_input, vel_input], outputs=[q_layer])
+
+    model.compile(loss='mse',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+
+    return model
+
+
 def model_ac(input_shape, output_dim):
     # Common Layers
     input_layer = Input(shape=input_shape)
