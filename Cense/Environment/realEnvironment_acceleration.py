@@ -19,14 +19,14 @@ class RealEnvironment(object):
     Y_DISENGAGED = -.3
     Y_ENGAGED = -.35
 
-    START_POSE = np.array([.3, Y_ENGAGED, .448, 0, np.pi / 2, 0])
+    START_POSE = np.array([.3, Y_ENGAGED, .458, 0, np.pi / 2, 0])
     #PREVIOUS_START_POSE = START_POSE
 
     CURRENT_START_POSE = START_POSE
     GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
     # GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, np.pi/2, 0])
 
-    STATE_DIMENSIONS = (40, 40)
+    STATE_DIMENSIONS = (50, 50)
     VELOCITY_DIMENSIONS = (3,)
     ACTIONS = (3, 3)
 
@@ -53,8 +53,6 @@ class RealEnvironment(object):
 
         self.STEP_WATCHDOG = environment_config["step_watchdog"]
 
-        self.AMNT_TO_PUNISH_AT_INSUFFICIENT = int(environment_config["fraction_to_punish_at_insufficient"] * self.STEP_WATCHDOG)
-
         self.TRANSLATION_ACCELERATION_FORWARD = environment_config["translation_acceleration_forward"]
         self.TRANSLATION_ACCELERATION_SIDEWAYS = environment_config["translation_acceleration_sideways"]
         self.ROTATION_ACCELERATION = environment_config["rotation_acceleration"] * np.pi / 180
@@ -79,7 +77,7 @@ class RealEnvironment(object):
         self.reset_stepwatchdog()
 
     def reset_stepwatchdog(self):
-        self.CURRENT_STEP_WATCHDOG = self.STEP_WATCHDOG
+        self.CURRENT_STEP_WATCHDOG = 0
 
     def reset_velocities(self):
         self.velocities = np.zeros(3)
@@ -87,13 +85,11 @@ class RealEnvironment(object):
     def execute(self, action):
         logging.debug("Real Environment - execute")
 
-        if self.CURRENT_STEP_WATCHDOG == 0:
-            self.reset_stepwatchdog()
-            raise InsufficientProgressError
-        else:
-            self.CURRENT_STEP_WATCHDOG -= 1
+        self.CURRENT_STEP_WATCHDOG += 1
 
-        next_pose, _ = self.controller.current_pose()
+        # deep copy velocities
+        old_velocities = np.empty_like(self.velocities)
+        np.copyto(old_velocities, self.velocities)
 
         # calculate new velocities [mm/step]
         #forward
@@ -119,6 +115,8 @@ class RealEnvironment(object):
                                  -self.MAX_ABS_ROTATION_VELOCITY)
 
         # new pose:
+        next_pose, _ = self.controller.current_pose()
+
         # forward
         next_pose[0] -= self.velocities[0] * np.sin(next_pose[4])
         next_pose[2] -= self.velocities[0] * np.cos(next_pose[4])
@@ -137,7 +135,9 @@ class RealEnvironment(object):
                 reward = self.PUNISHMENT_WIRE
                 terminal = True
                 self.reset_stepwatchdog()
-                self.reset_velocities()
+                # restore velocities to avoid that the robot accelerates up to maximum velocity
+                np.copyto(self.velocities, old_velocities)
+
             elif self.is_at_goal():
                 reward = self.REWARD_GOAL
                 terminal = True
@@ -153,13 +153,12 @@ class RealEnvironment(object):
                 self.advance_checkpoints()
                 self.reset_stepwatchdog()
             else:
-                # reward high velocities
-                reward = np.absolute(self.velocities[0] / self.MAX_TRANSLATION_VELOCITY_FORWARD) \
-                        + np.absolute(self.velocities[1] / self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS) \
-                        + np.absolute(self.velocities[2] / self.MAX_ABS_ROTATION_VELOCITY)
-
-                reward /= 3
+                reward = -self.CURRENT_STEP_WATCHDOG/self.STEP_WATCHDOG
                 #reward = self.REWARD_GENERIC
+
+            if self.CURRENT_STEP_WATCHDOG >= self.STEP_WATCHDOG:
+                self.reset_stepwatchdog()
+                raise InsufficientProgressError
 
             state = self.observe_state()
 
@@ -174,10 +173,17 @@ class RealEnvironment(object):
                 raise
             raise
 
+    def get_normalized_velocities(self):
+        normalized_velocities = [self.velocities[0] / self.MAX_TRANSLATION_VELOCITY_FORWARD,
+                                 self.velocities[1] / self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS,
+                                 self.velocities[2] / self.MAX_ABS_ROTATION_VELOCITY]
+
+        return normalized_velocities
+
     def observe_state(self):
         logging.debug("Real Environment - observe_state")
 
-        return [self.camera.capture_image(), self.velocities]
+        return [self.camera.capture_image(), self.get_normalized_velocities()]
 
     def is_at_goal(self):
         logging.debug("Real Environment - is_at_goal")
@@ -295,8 +301,6 @@ if __name__ == "__main__":
     "reward_generic": -0.1,
 
     "step_watchdog": 10,
-
-    "fraction_to_punish_at_insufficient": 0.5,
 
     "translation_distance": 0.01,
     "rotation_angle": 30

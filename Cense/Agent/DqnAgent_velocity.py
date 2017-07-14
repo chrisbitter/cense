@@ -9,9 +9,9 @@ import numpy as np
 
 import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
 from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
-from Cense.Environment.realEnvironment_distance import RealEnvironment as World
-from Cense.Environment.realEnvironment_distance import *
-from Cense.Interface.pyqtgraphInterface_distance import Interface as Interface
+from Cense.Environment.realEnvironment_velocity import RealEnvironment as World
+from Cense.Environment.realEnvironment_velocity import *
+from Cense.Interface.pyqtgraphInterface_velocity import Interface as Interface
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -301,7 +301,6 @@ class DeepQNetworkAgent(object):
         while self.interface.running_status is not 'exit':
             pass
 
-
     def start_training(self):
         self.start = True
 
@@ -373,9 +372,9 @@ class DeepQNetworkAgent(object):
             except InsufficientProgressError:
                 self.interface.set_status("Insufficient Progress. Aborting Run.")
                 if len(states):
-                    run_reward -= sum(rewards[-self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT:])
-                    rewards[-self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT:] = [self.world.PUNISHMENT_INSUFFICIENT_PROGRESS] * self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT
-                    run_reward += self.world.PUNISHMENT_INSUFFICIENT_PROGRESS * self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT
+                    run_reward -= rewards[-1]
+                    rewards[-1] = self.world.PUNISHMENT_INSUFFICIENT_PROGRESS
+                    run_reward += self.world.PUNISHMENT_INSUFFICIENT_PROGRESS
 
                 break
             except IllegalPoseException:
@@ -392,7 +391,6 @@ class DeepQNetworkAgent(object):
             run_reward += reward
 
         return states, actions, rewards, suc_states, terminals, run_steps, run_reward
-
 
     def play(self):
 

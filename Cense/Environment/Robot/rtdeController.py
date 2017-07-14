@@ -56,7 +56,7 @@ class RtdeController(object):
     CONSTRAINT_MIN = np.array([-.19, -.38, .07])
     CONSTRAINT_MAX = np.array([.33, -.27, .8])
 
-    SPEED_FRACTION = .7
+    SPEED_FRACTION = .6
 
     connection = None
 
@@ -95,6 +95,8 @@ class RtdeController(object):
         # Initiate connection
         self.connection.connect()
 
+        print(self.connection.is_connected())
+
         # get_controller_version is used to know if minimum requirements are met
         self.connection.get_controller_version()
 
@@ -124,6 +126,9 @@ class RtdeController(object):
         self.abort_signal.input_int_register_0 = 0
 
         self.connection.send_start()
+
+        self.abort_signal.__dict__[b"input_int_register_0"] = 0
+        self.connection.send(self.abort_signal)
 
     def current_pose(self):
         with self.lock:
@@ -164,11 +169,9 @@ class RtdeController(object):
 
             timestamp = time.time()
 
-            touched_wire = False
             while True:
 
                 if self.loop.has_touched_wire(timestamp):
-                    touched_wire = True
                     if not force:
                         break
 
@@ -183,7 +186,11 @@ class RtdeController(object):
                 if translation_deviation < self.ERROR_TRANSLATION and rotation_deviation < self.ERROR_ROTATION:
                     break
 
-            if (touched_wire or self.loop.has_touched_wire(timestamp)) and not force:
+            touched_wire = False
+
+            if self.loop.has_touched_wire(timestamp) and not force:
+
+                touched_wire = True
 
                 self.abort_movement()
 
@@ -209,8 +216,17 @@ class RtdeController(object):
             return touched_wire
 
     def abort_movement(self):
+        logging.debug('abort')
+
         self.abort_signal.__dict__[b"input_int_register_0"] = 1
         self.connection.send(self.abort_signal)
+
+        while True:
+            state = self.connection.receive()
+            logging.debug(np.sum(np.absolute(state.__dict__[b'actual_TCP_speed'])))
+            if np.sum(np.absolute(state.__dict__[b'actual_TCP_speed'])) < 0.01:
+                break
+
         self.abort_signal.__dict__[b"input_int_register_0"] = 0
         self.connection.send(self.abort_signal)
 
@@ -218,37 +234,49 @@ class RtdeController(object):
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.DEBUG)
 
-    import matplotlib.pyplot as plt
-    from matplotlib.figure import Figure
+    controller = RtdeController(print)
 
-    con = RtdeController(print)
+    START_POSE = np.array([.3, -.35, .458, 0, np.pi / 2, 0])
+    GOAL_POSE = np.array([controller.CONSTRAINT_MIN[0] + .03, -.35, .458, 0, np.pi / 2, 0])
+    # PREVIOUS_START_POSE = START_POSE
 
-    rotation = 30 * np.pi / 180
-    # rotation *= -1
-
-    x = []
-    y = []
+    while True:
+        controller.move_to_pose(START_POSE)
+        controller.move_to_pose(GOAL_POSE)
 
 
-    for i in range(1000):
-        now = time.time()
-        pose, _ = con.current_pose()
-        pose[4] += rotation
-        con.move_to_pose(pose)
 
-        execution_time = time.time()-now
-
-        rotation *= -1
-
-        x.append(i)
-        y.append(execution_time)
-
-        plt.plot(x, y)
-        plt.draw()
-        plt.pause(0.001)
-
-        timeout = time.time() + 5
-        while time.time() < timeout:
-            pass
+    # import matplotlib.pyplot as plt
+    # from matplotlib.figure import Figure
+    #
+    # con = RtdeController(print)
+    #
+    # rotation = 30 * np.pi / 180
+    # # rotation *= -1
+    #
+    # x = []
+    # y = []
+    #
+    #
+    # for i in range(1000):
+    #     now = time.time()
+    #     pose, _ = con.current_pose()
+    #     pose[4] += rotation
+    #     con.move_to_pose(pose)
+    #
+    #     execution_time = time.time()-now
+    #
+    #     rotation *= -1
+    #
+    #     x.append(i)
+    #     y.append(execution_time)
+    #
+    #     plt.plot(x, y)
+    #     plt.draw()
+    #     plt.pause(0.001)
+    #
+    #     timeout = time.time() + 5
+    #     while time.time() < timeout:
+    #         pass
 
 

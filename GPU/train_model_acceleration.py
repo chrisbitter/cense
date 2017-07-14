@@ -32,6 +32,9 @@ class MissingFileException(Exception):
 
 # v1
 def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
+
+    num_outputs = np.prod(output_dim)
+
     # this part of the network processes the
     img_input = Input(shape=image_input_shape)
     image_layer = Reshape(image_input_shape + (1,))(img_input)
@@ -43,23 +46,24 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
 
     # this part takes care of the velocity input values
     vel_input = Input(shape=velocity_input_shape)
-    #vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
+    vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
+    vel_layer = Flatten()(vel_layer)
 
 
     # here, the preprocessed image and the velocities are merged into one tensor
-    concat_layer = Concatenate()([image_layer, vel_input])
+    concat_layer = Concatenate()([image_layer, vel_layer])
 
 
     # advantage function of actions
     adv_layer = Dense(100, activation="relu")(concat_layer)
     adv_layer = Dense(50, activation="relu")(adv_layer)
-    adv_layer = Dense(output_dim, activation="tanh")(adv_layer)
+    adv_layer = Dense(num_outputs, activation="tanh")(adv_layer)
 
     # value of state
     val_layer = Dense(100, activation="relu")(concat_layer)
     val_layer = Dense(50, activation="relu")(val_layer)
     val_layer = Dense(1, activation="linear")(val_layer)
-    val_layer = RepeatVector(output_dim)(val_layer)
+    val_layer = RepeatVector(num_outputs)(val_layer)
     val_layer = Flatten()(val_layer)
     # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
     # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
@@ -69,11 +73,15 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
                     output_shape=lambda x: x[0])
     # q_layer = Activation(activation="tanh")(q_layer)
 
+    q_layer = Reshape(output_dim)(q_layer)
+
     model = Model(inputs=[img_input, vel_input], outputs=[q_layer])
 
     model.compile(loss='mse',
                   optimizer='adam',
                   metrics=['accuracy'])
+
+    print(model.summary())
 
     return model
 
@@ -81,8 +89,8 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
 class Training(object):
     experience_buffer = deque()
 
-    STATE_DIMENSIONS = (40, 40)
-    VELOCITY_DIMENSIONS = 3
+    STATE_DIMENSIONS = (50, 50)
+    VELOCITY_DIMENSIONS = (3,)
     ACTIONS = (3,3)
 
     root_folder = "/home/useradmin/Dokumente/rm505424/CENSE/Christian/training_data/"
@@ -97,6 +105,7 @@ class Training(object):
     data_file = root_folder + "data/data.h5"
 
     states = None
+    velocities = None
     actions = None
     rewards = None
     suc_states = None
@@ -133,9 +142,11 @@ class Training(object):
         if os.path.isfile(self.data_file):
             with h5py.File(self.data_file, 'r') as f:
                 self.states = f['states'][:]
+                self.velocities = f['velocities'][:]
                 self.actions = f['actions'][:]
                 self.rewards = f['rewards'][:]
                 self.suc_states = f['suc_states'][:]
+                self.suc_velocities = f['suc_velocities'][:]
                 self.terminals = f['terminals'][:]
 
         # Load new data
@@ -145,15 +156,19 @@ class Training(object):
                 with h5py.File(self.new_data_folder + new_data_file, 'r') as f:
                     if self.states is None:
                         self.states = f['states'][:]
+                        self.velocities = f['velocities'][:]
                         self.actions = f['actions'][:]
                         self.rewards = f['rewards'][:]
                         self.suc_states = f['suc_states'][:]
+                        self.suc_velocities = f['suc_velocities'][:]
                         self.terminals = f['terminals'][:]
                     else:
                         self.states = np.concatenate([self.states, f['states'][:]])
+                        self.velocities = np.concatenate([self.velocities, f['velocities'][:]])
                         self.actions = np.concatenate([self.actions, f['actions'][:]])
                         self.rewards = np.concatenate([self.rewards, f['rewards'][:]])
                         self.suc_states = np.concatenate([self.suc_states, f['suc_states'][:]])
+                        self.suc_velocities = np.concatenate([self.suc_velocities, f['suc_velocities'][:]])
                         self.terminals = np.concatenate([self.terminals, f['terminals'][:]])
 
                 # all data will be saved in data.h5, so no need for old data file
@@ -165,9 +180,11 @@ class Training(object):
         # Save experience data to data.h5 file
         with h5py.File(self.data_file, 'w') as f:
             f.create_dataset('states', data=self.states)
+            f.create_dataset('velocities', data=self.velocities)
             f.create_dataset('actions', data=self.actions)
             f.create_dataset('rewards', data=self.rewards)
             f.create_dataset('suc_states', data=self.suc_states)
+            f.create_dataset('suc_velocities', data=self.suc_velocities)
             f.create_dataset('terminals', data=self.terminals)
 
         # training
@@ -192,7 +209,7 @@ class Training(object):
                 minibatch = np.random.choice(self.experience_buffer, size=batch_size)
 
                 # inputs are the states
-                batch_states = np.array([self.states[i] for i in minibatch])  # bx[40x40,3x1]
+                batch_states = np.array([[self.states[i], self.velocities[i]] for i in minibatch])  # bx[40x40, 3x1]
                 batch_targets = self.model.predict_on_batch(batch_states)  # bx3x3
 
                 batch_actions = np.array([self.actions[i] for i in minibatch]) # bx3
@@ -200,7 +217,7 @@ class Training(object):
                 # print("Batch targets Q-Network:\n", batch_targets)
 
                 # get corresponding successor states for minibatch
-                batch_suc_states = np.array([self.suc_states[i] for i in minibatch])  # bx[40x40,3x1]
+                batch_suc_states = np.array([[self.suc_states[i], self.suc_velocities[i]] for i in minibatch])  # bx[40x40,3x1]
                 batch_terminals = np.array([self.terminals[i] for i in minibatch]).astype('bool')  # bx1
                 batch_rewards = np.array([self.rewards[i] for i in minibatch])  # bx1
 

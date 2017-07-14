@@ -24,16 +24,17 @@ class Camera(object):
         rgb = np.array(frame.getdata(),
                        np.uint8).reshape(frame.size[1], frame.size[0], 3)
 
-        rgb_cropped = rgb[100:, 130:500, :]
+        #rgb_cropped = rgb[100:, 130:500, :]
+        #rgb_cropped = rgb
 
-        gray = np.dot(rgb_cropped[..., :3], [.299, .587, .114])
+        gray = np.dot(rgb[..., :3], [.299, .587, .114])
 
         return imresize(gray, self.SIZE) / 255
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    cam = Camera((40, 40), print)
+    cam = Camera((50, 50), print)
 
     state = cam.capture_image()
     plt.imshow(state, cmap='gray')

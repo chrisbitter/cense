@@ -3,9 +3,9 @@
     "resume_training": 0,
     "exploration_probability_start": 1,
     "exploration_probability_end": 0.1,
-    "exploration_probability_runs_until_end": 200,
+    "exploration_probability_runs_until_end": 500,
     "exploration_probability_boost_runs_until_end": 50,
-    "runs_before_update": 20,
+    "runs_before_update": 1,
     "runs_before_advancing_start": 10,
     "runs_before_testing_from_start": 25,
     "min_steps_before_model_save": 30,
@@ -56,7 +56,6 @@
     "reward_generic": -0.1,
 
     "step_watchdog": 10,
-    "fraction_to_punish_at_insufficient": 0.4,
 
     "translation_distance": 0.01,
     "rotation_angle": 30

@@ -1,5 +1,5 @@
 from Cense.Environment.Robot.rtdeController import RtdeController
-from Cense.Environment.realEnvironment import RealEnvironment
+from Cense.Environment.realEnvironment_distance import RealEnvironment
 import time
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches

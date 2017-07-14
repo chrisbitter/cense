@@ -50,8 +50,6 @@ class RealEnvironment(object):
 
         self.STEP_WATCHDOG = environment_config["step_watchdog"]
 
-        self.AMNT_TO_PUNISH_AT_INSUFFICIENT = int(environment_config["fraction_to_punish_at_insufficient"] * self.STEP_WATCHDOG)
-
         self.TRANSLATION_DISTANCE = environment_config["translation_distance"]
         self.ROTATION_ANGLE = environment_config["rotation_angle"] * np.pi / 180
 
@@ -69,16 +67,12 @@ class RealEnvironment(object):
         self.reset_stepwatchdog()
 
     def reset_stepwatchdog(self):
-        self.CURRENT_STEP_WATCHDOG = self.STEP_WATCHDOG
+        self.CURRENT_STEP_WATCHDOG = 0
 
     def execute(self, action):
         logging.debug("Real Environment - execute")
 
-        if self.CURRENT_STEP_WATCHDOG == 0:
-            self.reset_stepwatchdog()
-            raise InsufficientProgressError
-        else:
-            self.CURRENT_STEP_WATCHDOG -= 1
+        self.CURRENT_STEP_WATCHDOG += 1
 
         next_pose, _ = self.controller.current_pose()
 
@@ -127,7 +121,11 @@ class RealEnvironment(object):
                 self.advance_checkpoints()
                 self.reset_stepwatchdog()
             else:
-                reward = self.REWARD_GENERIC
+                reward = -self.CURRENT_STEP_WATCHDOG/self.STEP_WATCHDOG
+
+            if self.CURRENT_STEP_WATCHDOG >= self.STEP_WATCHDOG:
+                self.reset_stepwatchdog()
+                raise InsufficientProgressError
 
             state = self.observe_state()
 
@@ -261,8 +259,6 @@ if __name__ == "__main__":
     "reward_generic": -0.1,
 
     "step_watchdog": 10,
-
-    "fraction_to_punish_at_insufficient": 0.5,
 
     "translation_distance": 0.01,
     "rotation_angle": 30

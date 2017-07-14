@@ -77,7 +77,7 @@ class Interface():
         self.exploration_curve = exploration_plot_item.plot()
         exploration_plot_item.setTitle("Exploration Probability")
 
-        # Q-Value Plot
+        # Velocities Plot
 
         self.velocity_plot = pg.BarGraphItem(x=range(3), height=np.zeros(3), width=1, brush='b')
 
@@ -87,12 +87,13 @@ class Interface():
         stringaxis = pg.AxisItem(orientation='bottom')
         stringaxis.setTicks([xdict.items()])
 
-        q_value_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
+        velocity_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
 
-        q_value_plot_item = q_value_widget.getPlotItem()
-        q_value_plot_item.enableAutoRange()
-        q_value_plot_item.addItem(self.velocity_plot)
-        q_value_plot_item.setTitle("Q-Values")
+        velocity_plot_item = velocity_widget.getPlotItem()
+        #velocity_plot_item.enableAutoRange()
+        velocity_plot_item.addItem(self.velocity_plot)
+        velocity_plot_item.setTitle("Velocities")
+        velocity_plot_item.setYRange(-1,1)
 
         # Test Steps Plot
 
@@ -131,7 +132,7 @@ class Interface():
         layout.addWidget(state_plot_widget, 1, 2)
         layout.addWidget(exploration_widget, 1, 3)
         layout.addWidget(test_steps_widget, 2, 1)
-        layout.addWidget(q_value_widget, 2, 2)
+        layout.addWidget(velocity_widget, 2, 2)
         layout.addWidget(self.text_widget, 2, 3)
 
         view.setLayout(layout)
@@ -191,8 +192,8 @@ class Interface():
             self.exploration_curve.setData(x=[run_number], y=[exploration_probability])
 
     @check_interface_status
-    def update_velocity_plot(self, velocities, action):
-        # draw q_values except value corresponding to action
+    def update_velocity(self, velocities, action):
+        # draw velocitys except value corresponding to action
 
         colors = ['b'] * 3
 
@@ -254,11 +255,11 @@ if __name__ == '__main__':
     while go and t < 1000:
         now = time.time()
         interface.update_steps(t, np.random.random())
-        interface.update_state(np.random.rand(40, 40))
+        interface.update_state([np.random.rand(40, 40), 0])
 
         if t % 10 == 0:
             interface.update_test_steps(t, np.random.random() * t)
-        interface.update_q_value(np.random.rand(5), np.random.randint(5))
+        interface.update_velocity(np.zeros(3), np.random.randint(3, size=3))
         interface.set_status(t)
         interface.update_exploration(t, time.time() - now)
 

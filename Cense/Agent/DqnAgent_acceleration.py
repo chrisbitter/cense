@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+from  copy import deepcopy
 from threading import Thread
 
 import numpy as np
@@ -232,17 +233,29 @@ class DeepQNetworkAgent(object):
                     logging.debug("Replace NN and start new training")
 
                     self.model.load_weights(self.weights_file)
+
+                    # deep copy experience
+                    gpu_states = (np.array(states)[:,0]).tolist()
+                    gpu_velocities = (np.array(states)[:,1]).tolist()
+                    gpu_actions = actions.copy()
+                    gpu_rewards = rewards.copy()
+                    gpu_suc_states = (np.array(suc_states)[:, 0]).tolist()
+                    gpu_suc_velocities = (np.array(suc_states)[:, 1]).tolist()
+                    gpu_terminals = terminals.copy()
+
                     Thread(target=self.trainer.train,
-                           args=(states, actions, rewards, suc_states, terminals)).start()
+                           args=(gpu_states, gpu_actions, gpu_rewards, gpu_suc_states, gpu_terminals, gpu_velocities, gpu_suc_velocities)).start()
 
                     training_number += 1
 
-                    # clear experience collection
+                    # clear experience buffer
                     states = []
                     actions = []
                     rewards = []
                     suc_states = []
                     terminals = []
+
+
                 else:
                     self.interface.set_status("Update Network: Failed")
                     statistics["successful_network_update"] = 0
@@ -316,6 +329,8 @@ class DeepQNetworkAgent(object):
 
     def run_until_terminal(self, exploration_probability):
 
+        logging.debug('run_until_terminal')
+
         states = []
         actions = []
         rewards = []
@@ -335,23 +350,21 @@ class DeepQNetworkAgent(object):
 
             self.interface.update_state(state)
 
-            state[0] = np.expand_dims(state[0], axis=0)
-            state[1] = np.expand_dims(state[1], axis=0)
-
-            q_values = self.model.predict(state)
+            q_values = self.model.predict([np.expand_dims(state[0], axis=0), np.expand_dims(state[1], axis=0)])
 
             if np.any(np.isnan(q_values)):
                 raise ValueError("Net is broken!")
 
-            action = np.random.randint(self.world.ACTIONS[1], size=self.world.ACTIONS[0])
-
             # explore with exploration_probability, else exploit
-            for i in range(self.world.ACTIONS[0]):
-                if np.random.random() >= exploration_probability:
-                    # exploit
-                    action[i] = np.argmax(q_values[0][i])
 
-            self.interface.update_velocity_plot(self.world.velocities, action)
+            if np.random.random() < exploration_probability:
+                # explore
+                action = np.random.randint(self.world.ACTIONS[1], size=self.world.ACTIONS[0])
+            else:
+                # exploit
+                action = [np.argmax(q_values[0][i]) for i in range(self.world.ACTIONS[0])]
+
+            self.interface.update_velocity(self.world.get_normalized_velocities(), action)
 
             try:
                 suc_state, reward, terminal = self.world.execute(action)
@@ -378,9 +391,9 @@ class DeepQNetworkAgent(object):
             except InsufficientProgressError:
                 self.interface.set_status("Insufficient Progress. Aborting Run.")
                 if len(states):
-                    run_reward -= sum(rewards[-self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT:])
-                    rewards[-self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT:] = [self.world.PUNISHMENT_INSUFFICIENT_PROGRESS] * self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT
-                    run_reward += self.world.PUNISHMENT_INSUFFICIENT_PROGRESS * self.world.AMNT_TO_PUNISH_AT_INSUFFICIENT
+                    run_reward -= rewards[-1]
+                    rewards[-1] = self.world.PUNISHMENT_INSUFFICIENT_PROGRESS
+                    run_reward += self.world.PUNISHMENT_INSUFFICIENT_PROGRESS
 
                 break
             except IllegalPoseException:
@@ -395,6 +408,8 @@ class DeepQNetworkAgent(object):
             # collect stats
             run_steps += 1
             run_reward += reward
+
+        logging.debug('run_until_terminal done')
 
         return states, actions, rewards, suc_states, terminals, run_steps, run_reward
 

@@ -8,7 +8,6 @@ import paramiko
 
 
 class GpuTrainer(object):
-
     host = None
     port = None
     username = None
@@ -86,6 +85,7 @@ class GpuTrainer(object):
         ssh.connect(self.host, self.port, self.username, self.password)
 
         command = "python " + self.script_reset
+        print(command)
         stdin, stdout, stderr = ssh.exec_command(command)
 
         exit_status = stdout.channel.recv_exit_status()
@@ -96,7 +96,7 @@ class GpuTrainer(object):
 
         ssh.close()
 
-    def train(self, states, actions, rewards, suc_states, terminals):
+    def train(self, states, actions, rewards, suc_states, terminals, velocities=None, suc_velocities=None):
 
         if self.host is None or self.port is None or self.username is None or self.password is None:
             print("Credentials missing!")
@@ -126,6 +126,11 @@ class GpuTrainer(object):
             f.create_dataset('rewards', data=rewards)
             f.create_dataset('suc_states', data=suc_states)
             f.create_dataset('terminals', data=terminals)
+
+            if velocities is not None:
+                f.create_dataset('velocities', data=velocities)
+            if suc_velocities is not None:
+                f.create_dataset('suc_velocities', data=suc_velocities)
 
         # init sftp
         transport = paramiko.Transport((self.host, self.port))
@@ -254,23 +259,57 @@ class GpuTrainer(object):
     def is_done_training(self):
         return self.done_training
 
+
 if __name__ == "__main__":
+    gpu = GpuTrainer({
+        "epochs_start": 500,
+        "epochs_end": 1000,
+        "batch_size_start": 25,
+        "batch_size_end": 100,
+        "trainings_before_param_update": 5,
+        "trainings_until_end_config": 25,
+        "trainings_without_target": 3,
+        "discount_factor": 0.99,
+        "target_update_rate": 0.01,
+        "gpu_settings": {
+            "host": "137.226.189.187",
+            "port": 22,
+            "user": "useradmin",
+            "password": "cocacola",
 
-    gpu = GpuTrainer(os.path.join(os.getcwd(), "..", "..", ""), print)
+            "local_data_root": "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\nn-data\\",
+            "new_data_local": "new_data.h5",
+            "model_config_local": "model.json",
+            "model_weights_local": "weights.h5",
+            "training_params_local": "train_params.json",
 
-    import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
-    import numpy as np
+            "remote_data_root": "/home/useradmin/Dokumente/rm505424/CENSE/Christian/",
+            "new_data_remote": "training_data/data/new_data/new_data.h5",
+            "model_config_remote": "training_data/model/model.json",
+            "model_weights_remote": "training_data/model/weights.h5",
+            "training_params_remote": "training_data/train_params.json",
 
-    model = Factory.model_simple_conv((50, 50), 6)
-    print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+            "script_remote": "train_model_acceleration.py",
+            "test_script_remote": "test_model.py",
+            "script_reset": "reset.py"
+        }
+    }, print)
 
-    model.save_weights(gpu.model_weights_local)
-    gpu.send_model_to_gpu()
+    gpu.reset()
 
-    gpu.test_on_gpu()
-
-    model.load_weights(gpu.model_weights_local)
-
-    print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
-
+    # import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
+    # import numpy as np
+    #
+    # model = Factory.model_simple_conv((50, 50), 6)
+    # print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+    #
+    # model.save_weights(gpu.model_weights_local)
+    # gpu.send_model_to_gpu()
+    #
+    # gpu.test_on_gpu()
+    #
+    # model.load_weights(gpu.model_weights_local)
+    #
+    # print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+    #
     print("done")
