@@ -77,23 +77,35 @@ class Interface():
         self.exploration_curve = exploration_plot_item.plot()
         exploration_plot_item.setTitle("Exploration Probability")
 
-        # Velocities Plot
+        # Velocity Plot
 
-        self.velocity_plot = pg.BarGraphItem(x=range(3), height=np.zeros(3), width=1, brush='b')
-
-        action_names = ['forward', 'right', 'rot_right']
-        xdict = dict(enumerate(action_names))
-
-        stringaxis = pg.AxisItem(orientation='bottom')
-        stringaxis.setTicks([xdict.items()])
-
-        velocity_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
+        velocity_widget = pg.PlotWidget()
 
         velocity_plot_item = velocity_widget.getPlotItem()
-        #velocity_plot_item.enableAutoRange()
-        velocity_plot_item.addItem(self.velocity_plot)
-        velocity_plot_item.setTitle("Velocities")
-        velocity_plot_item.setYRange(-1,1)
+
+        a1 = pg.ArrowItem(angle=90, tipAngle=30, baseAngle=20, headLen=40, tailLen=20, tailWidth=8, pen=None,brush='b')
+        self.new_pose_arrow = pg.ArrowItem(angle=90, tipAngle=30, baseAngle=20, headLen=40, tailLen=20, tailWidth=8, pen=None, brush='r')
+
+        self.arrow_rotation = 0
+
+        velocity_plot_item.addItem(a1)
+        velocity_plot_item.addItem(self.new_pose_arrow)
+
+        # self.velocity_plot = pg.BarGraphItem(x=range(3), height=np.zeros(3), width=1, brush='b')
+        #
+        # action_names = ['forward', 'right', 'rot_right']
+        # xdict = dict(enumerate(action_names))
+        #
+        # stringaxis = pg.AxisItem(orientation='bottom')
+        # stringaxis.setTicks([xdict.items()])
+        #
+        # velocity_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
+        #
+        # velocity_plot_item = velocity_widget.getPlotItem()
+        # #velocity_plot_item.enableAutoRange()
+        # velocity_plot_item.addItem(self.velocity_plot)
+        # velocity_plot_item.setTitle("Velocities")
+        # velocity_plot_item.setYRange(-1,1)
 
         # Test Steps Plot
 
@@ -192,18 +204,27 @@ class Interface():
             self.exploration_curve.setData(x=[run_number], y=[exploration_probability])
 
     @check_interface_status
-    def update_velocity(self, velocities, action):
-        # draw velocitys except value corresponding to action
+    def update_velocity(self, velocity):
+        self.new_pose_arrow.setPos(velocity[1]*100, velocity[0]*100)
 
-        colors = ['b'] * 3
+        self.new_pose_arrow.rotate(-self.arrow_rotation + velocity[2]*180/np.pi)
+        self.arrow_rotation = velocity[2]*180/np.pi
+        #self.new_pose_arrow.rotate(self.arrow_rotation)
 
-        for i in range(3):
-            if action[i] == 0:
-                colors[i] = 'g'
-            elif action[i] == 1:
-                colors[i] = 'r'
 
-        self.velocity_plot.setOpts(height=velocities, brushes=colors)
+    # @check_interface_status
+    # def update_velocity(self, velocities, action):
+    #     # draw velocitys except value corresponding to action
+    #
+    #     colors = ['b'] * 3
+    #
+    #     for i in range(3):
+    #         if action[i] == 0:
+    #             colors[i] = 'g'
+    #         elif action[i] == 1:
+    #             colors[i] = 'r'
+    #
+    #     self.velocity_plot.setOpts(height=velocities, brushes=colors)
 
     @check_interface_status
     def update_state(self, state):
@@ -259,9 +280,9 @@ if __name__ == '__main__':
 
         if t % 10 == 0:
             interface.update_test_steps(t, np.random.random() * t)
-        interface.update_velocity(np.zeros(3), np.random.randint(3, size=3))
+        interface.update_velocity([t/10, t/10, 10*t*np.pi/180])
         interface.set_status(t)
         interface.update_exploration(t, time.time() - now)
 
-        time.sleep(5)
+        time.sleep(1)
         t += 1

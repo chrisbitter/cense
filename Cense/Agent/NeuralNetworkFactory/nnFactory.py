@@ -220,6 +220,7 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
 
     # here, the preprocessed image and the velocities are merged into one tensor
     concat_layer = Concatenate()([image_layer, vel_layer])
+    concat_layer = Dropout(.3)(concat_layer)
 
 
     # advantage function of actions

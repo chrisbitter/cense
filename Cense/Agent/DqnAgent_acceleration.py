@@ -228,7 +228,7 @@ class DeepQNetworkAgent(object):
             # train neural network after collecting some experience
             if run_number % self.runs_before_update == 0 and not self.stop:
                 if self.trainer.is_done_training() and len(states):
-                    self.interface.set_status("Update Network: Success")
+                    self.interface.set_status("Update Network!")
                     statistics["successful_network_update"] = 1
                     logging.debug("Replace NN and start new training")
 
@@ -257,7 +257,6 @@ class DeepQNetworkAgent(object):
 
 
                 else:
-                    self.interface.set_status("Update Network: Failed")
                     statistics["successful_network_update"] = 0
 
             run_steps = 0
@@ -364,7 +363,7 @@ class DeepQNetworkAgent(object):
                 # exploit
                 action = [np.argmax(q_values[0][i]) for i in range(self.world.ACTIONS[0])]
 
-            self.interface.update_velocity(self.world.get_normalized_velocities(), action)
+            self.interface.update_velocity(self.world.velocity)
 
             try:
                 suc_state, reward, terminal = self.world.execute(action)
@@ -423,8 +422,7 @@ class DeepQNetworkAgent(object):
             try:
                 self.world.reset(hard_reset=True)
 
-                new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
-                    self.run_until_terminal(0)
+                self.run_until_terminal(0)
 
             except (UntreatableStateError, IllegalPoseException) as e:
                 self.interface.set_status("Something went wrong! Shutting down")

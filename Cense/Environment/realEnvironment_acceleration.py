@@ -1,6 +1,7 @@
 import logging
 
 import numpy as np
+from copy import deepcopy
 
 from Cense.Environment.Camera.camera_videocapture import Camera as Camera
 from Cense.Environment.Robot.rtdeController import RtdeController as Controller, IllegalPoseException, SpawnedInTerminalStateError, ExitedInTerminalStateError
@@ -23,6 +24,8 @@ class RealEnvironment(object):
     #PREVIOUS_START_POSE = START_POSE
 
     CURRENT_START_POSE = START_POSE
+    CURRENT_START_VELOCITY = np.zeros(3)
+
     GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
     # GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, np.pi/2, 0])
 
@@ -38,7 +41,7 @@ class RealEnvironment(object):
 
     last_action = None
 
-    velocities = np.zeros(3)
+    velocity = np.zeros(3)
 
     def __init__(self, environment_config, set_status_func):
 
@@ -79,52 +82,49 @@ class RealEnvironment(object):
     def reset_stepwatchdog(self):
         self.CURRENT_STEP_WATCHDOG = 0
 
-    def reset_velocities(self):
-        self.velocities = np.zeros(3)
-
     def execute(self, action):
         logging.debug("Real Environment - execute")
 
         self.CURRENT_STEP_WATCHDOG += 1
 
-        # deep copy velocities
-        old_velocities = np.empty_like(self.velocities)
-        np.copyto(old_velocities, self.velocities)
+        # deep copy velocity
+        old_velocity = np.empty_like(self.velocity)
+        np.copyto(old_velocity, self.velocity)
 
-        # calculate new velocities [mm/step]
+        # calculate new velocity [mm/step]
         #forward
         if action[0] == 0:
-            self.velocities[0] += self.TRANSLATION_ACCELERATION_FORWARD
+            self.velocity[0] += self.TRANSLATION_ACCELERATION_FORWARD
         elif action[0] == 1:
-            self.velocities[0] -= self.TRANSLATION_ACCELERATION_FORWARD
-        self.velocities[0] = max(min(self.velocities[0], self.MAX_TRANSLATION_VELOCITY_FORWARD),
+            self.velocity[0] -= self.TRANSLATION_ACCELERATION_FORWARD
+        self.velocity[0] = max(min(self.velocity[0], self.MAX_TRANSLATION_VELOCITY_FORWARD),
                                  self.MIN_TRANSLATION_VELOCITY_FORWARD)
 
         if action[1] == 0:
-            self.velocities[1] += self.TRANSLATION_ACCELERATION_SIDEWAYS
+            self.velocity[1] += self.TRANSLATION_ACCELERATION_SIDEWAYS
         elif action[1] == 1:
-            self.velocities[1] -= self.TRANSLATION_ACCELERATION_SIDEWAYS
-        self.velocities[1] = max(min(self.velocities[1], self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS),
+            self.velocity[1] -= self.TRANSLATION_ACCELERATION_SIDEWAYS
+        self.velocity[1] = max(min(self.velocity[1], self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS),
                                  -self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS)
 
         if action[2] == 0:
-            self.velocities[2] += self.ROTATION_ACCELERATION
+            self.velocity[2] += self.ROTATION_ACCELERATION
         elif action[2] == 1:
-            self.velocities[2] -= self.ROTATION_ACCELERATION
-        self.velocities[2] = max(min(self.velocities[2], self.MAX_ABS_ROTATION_VELOCITY),
+            self.velocity[2] -= self.ROTATION_ACCELERATION
+        self.velocity[2] = max(min(self.velocity[2], self.MAX_ABS_ROTATION_VELOCITY),
                                  -self.MAX_ABS_ROTATION_VELOCITY)
 
         # new pose:
         next_pose, _ = self.controller.current_pose()
 
         # forward
-        next_pose[0] -= self.velocities[0] * np.sin(next_pose[4])
-        next_pose[2] -= self.velocities[0] * np.cos(next_pose[4])
+        next_pose[0] -= self.velocity[0] * np.sin(next_pose[4])
+        next_pose[2] -= self.velocity[0] * np.cos(next_pose[4])
         # right (negative is left)
-        next_pose[0] += self.velocities[1] * np.cos(next_pose[4])
-        next_pose[2] -= self.velocities[1] * np.sin(next_pose[4])
+        next_pose[0] += self.velocity[1] * np.cos(next_pose[4])
+        next_pose[2] -= self.velocity[1] * np.sin(next_pose[4])
         # rotation right (negative is left)
-        next_pose[4] -= self.velocities[2]
+        next_pose[4] -= self.velocity[2]
 
         terminal = False
 
@@ -135,14 +135,14 @@ class RealEnvironment(object):
                 reward = self.PUNISHMENT_WIRE
                 terminal = True
                 self.reset_stepwatchdog()
-                # restore velocities to avoid that the robot accelerates up to maximum velocity
-                np.copyto(self.velocities, old_velocities)
+                # restore velocity to avoid that the robot accelerates up to maximum velocity
+                np.copyto(self.velocity, old_velocity)
 
             elif self.is_at_goal():
                 reward = self.REWARD_GOAL
                 terminal = True
                 self.reset_stepwatchdog()
-                self.reset_velocities()
+                self.reset_current_start_pose()
 
             elif self.is_at_old_checkpoint():
                 reward = self.PUNISHMENT_OLD_CHECKPOINT
@@ -173,17 +173,17 @@ class RealEnvironment(object):
                 raise
             raise
 
-    def get_normalized_velocities(self):
-        normalized_velocities = [self.velocities[0] / self.MAX_TRANSLATION_VELOCITY_FORWARD,
-                                 self.velocities[1] / self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS,
-                                 self.velocities[2] / self.MAX_ABS_ROTATION_VELOCITY]
+    def get_normalized_velocity(self):
+        normalized_velocity = [self.velocity[0] / self.MAX_TRANSLATION_VELOCITY_FORWARD,
+                                 self.velocity[1] / self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS,
+                                 self.velocity[2] / self.MAX_ABS_ROTATION_VELOCITY]
 
-        return normalized_velocities
+        return normalized_velocity
 
     def observe_state(self):
         logging.debug("Real Environment - observe_state")
 
-        return [self.camera.capture_image(), self.get_normalized_velocities()]
+        return [self.camera.capture_image(), self.get_normalized_velocity()]
 
     def is_at_goal(self):
         logging.debug("Real Environment - is_at_goal")
@@ -222,10 +222,10 @@ class RealEnvironment(object):
     def reset(self, hard_reset=False):
         logging.debug("Real Environment - reset")
 
-        self.reset_velocities()
-
         if hard_reset:
             self.reset_current_start_pose()
+
+        self.velocity = deepcopy(self.CURRENT_START_VELOCITY)
 
         pose, _ = self.controller.current_pose()
         pose[1] = self.Y_DISENGAGED
@@ -234,7 +234,8 @@ class RealEnvironment(object):
         except IllegalPoseException:
             raise
 
-        pose = self.CURRENT_START_POSE
+        pose = deepcopy(self.CURRENT_START_POSE)
+
         pose[1] = self.Y_DISENGAGED
         try:
             self.controller.move_to_pose(pose, force=True)
@@ -277,13 +278,15 @@ class RealEnvironment(object):
         if not touching_wire:
             #self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
             self.CURRENT_START_POSE = current_pose
+            self.CURRENT_START_VELOCITY = deepcopy(self.velocity)
         else:
             print("Not updating start pose because loop is touching the wire")
 
     def reset_current_start_pose(self):
         logging.debug("Real Environment - reset_current_start_pose")
         #self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
-        self.CURRENT_START_POSE = self.START_POSE
+        self.CURRENT_START_POSE = deepcopy(self.START_POSE)
+        self.CURRENT_START_VELOCITY = np.zeros(3)
 
 
 if __name__ == "__main__":

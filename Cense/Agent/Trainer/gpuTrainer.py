@@ -44,13 +44,15 @@ class GpuTrainer(object):
         self.trainings_without_target = trainer_config["trainings_without_target"]
         self.discount_factor = trainer_config["discount_factor"]
         self.target_update_rate = trainer_config["target_update_rate"]
+        self.buffer_size = trainer_config["buffer_size"]
 
         self.current_gpu_config = {
             "epochs": self.epochs_start,
             "batch_size": self.batch_size_start,
             "use_target": 0,
             "discount_factor": self.discount_factor,
-            "target_update_rate": self.target_update_rate
+            "target_update_rate": self.target_update_rate,
+            "buffer_size": self.buffer_size
         }
 
         gpu_settings = trainer_config["gpu_settings"]
