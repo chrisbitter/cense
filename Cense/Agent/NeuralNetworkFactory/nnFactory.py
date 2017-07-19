@@ -172,6 +172,8 @@ def model_dueling_keras(input_shape, output_dim):
     # common_layer = MaxPooling2D(pool_size=(2, 2))(common_layer)
     common_layer = Flatten()(common_layer)
 
+    common_layer = Dropout(.3)(common_layer)
+
     # adv_layer = Dropout(0.2)(common_layer)
     adv_layer = Dense(100, activation="relu")(common_layer)
     adv_layer = Dense(50, activation="relu")(adv_layer)

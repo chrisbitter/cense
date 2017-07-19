@@ -3,7 +3,7 @@
     "resume_training": 0,
     "exploration_probability_start": 1,
     "exploration_probability_end": 0.1,
-    "exploration_probability_runs_until_end": 7000,
+    "exploration_probability_runs_until_end": 2000,
     "exploration_probability_boost_runs_until_end": 1000,
     "runs_before_update": 1,
     "runs_before_advancing_start": 10,
@@ -12,14 +12,14 @@
     "continue_after_success": 0
   },
   "trainer": {
-    "epochs_start": 500,
-    "epochs_end": 1000,
+    "epochs_start": 100,
+    "epochs_end": 100,
     "batch_size_start": 25,
-    "batch_size_end": 100,
+    "batch_size_end": 25,
     "trainings_before_param_update": 1,
     "trainings_until_end_config": 20,
     "trainings_without_target": 5,
-    "discount_factor": 0.99,
+    "discount_factor": 0.7,
     "target_update_rate": 0.01,
     "buffer_size": 500,
     "gpu_settings":{
