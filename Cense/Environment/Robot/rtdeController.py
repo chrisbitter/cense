@@ -95,8 +95,6 @@ class RtdeController(object):
         # Initiate connection
         self.connection.connect()
 
-        print(self.connection.is_connected())
-
         # get_controller_version is used to know if minimum requirements are met
         self.connection.get_controller_version()
 
