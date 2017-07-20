@@ -31,7 +31,7 @@ class RealEnvironment(object):
 
     STATE_DIMENSIONS = (50, 50)
     VELOCITY_DIMENSIONS = (3,)
-    ACTIONS = 27
+    ACTIONS = (3, 3)
 
     __checkpoints = []
 
@@ -92,40 +92,24 @@ class RealEnvironment(object):
         np.copyto(old_velocity, self.velocity)
 
         # calculate new velocity [mm/step]
-        # 27 actions = 3x3x3
-        # 0-8: accelerate forward
-        # 9-17: brake forward
-        # 18-26: do nothing forward
-
-        # each block has 9 entries. For each:
-        # 0-2: accelerate right
-        # 3-5: accelerate left
-        # 6-8: do nothing sideways
-
-        # each subblock has 3 entries. For each:
-        # 0: accelerate rotation right
-        # 1: accelerate rotation left
-        # 2: do nothing rotation
-
-        # forward
-        if action // 9 == 0:
+        #forward
+        if action[0] == 0:
             self.velocity[0] += self.TRANSLATION_ACCELERATION_FORWARD
-        elif action // 9 == 1:
+        elif action[0] == 1:
             self.velocity[0] -= self.TRANSLATION_ACCELERATION_FORWARD
         self.velocity[0] = max(min(self.velocity[0], self.MAX_TRANSLATION_VELOCITY_FORWARD),
                                  self.MIN_TRANSLATION_VELOCITY_FORWARD)
 
-        # sideways
-        if (action % 9) // 3 == 0:
+        if action[1] == 0:
             self.velocity[1] += self.TRANSLATION_ACCELERATION_SIDEWAYS
-        elif (action % 9) // 3 == 1:
+        elif action[1] == 1:
             self.velocity[1] -= self.TRANSLATION_ACCELERATION_SIDEWAYS
         self.velocity[1] = max(min(self.velocity[1], self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS),
                                  -self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS)
 
-        if action % 3 == 0:
+        if action[2] == 0:
             self.velocity[2] += self.ROTATION_ACCELERATION
-        elif action % 3 == 1:
+        elif action[2] == 1:
             self.velocity[2] -= self.ROTATION_ACCELERATION
         self.velocity[2] = max(min(self.velocity[2], self.MAX_ABS_ROTATION_VELOCITY),
                                  -self.MAX_ABS_ROTATION_VELOCITY)
@@ -151,12 +135,8 @@ class RealEnvironment(object):
                 reward = self.PUNISHMENT_WIRE
                 terminal = True
                 self.reset_stepwatchdog()
-
-                if np.random.random() < .7:
-                    # restore velocity to avoid that the robot accelerates up to maximum velocity
-                    np.copyto(self.velocity, old_velocity)
-                else:
-                    self.velocity = np.zeros(3)
+                # restore velocity to avoid that the robot accelerates up to maximum velocity
+                np.copyto(self.velocity, old_velocity)
 
             elif self.is_at_goal():
                 reward = self.REWARD_GOAL

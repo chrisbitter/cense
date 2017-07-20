@@ -30,10 +30,19 @@ class MissingFileException(Exception):
         self.msg = msg
 
 
-# v1
-def model_acceleration_q(image_input_shape, velocity_input_shape,  num_outputs):
+def action_cascade_network(image_input_shape, velocity_input_shape, action_dim):
+    # num_outputs = np.prod(output_dim)
 
-    #num_outputs = np.prod(output_dim)
+    train_network = Input(shape=(1,))
+
+    train_action = Input(shape=action_dim)
+
+    action_0 = Lambda(lambda x: x[:, 0, :])(train_action)
+    action_1 = Lambda(lambda x: x[:, 1, :])(train_action)
+
+    # action_0 = Input(shape=(action_dim,))
+    # action_1 = Input(shape=(action_dim,))
+    # #action_2 = Input(shape=(action_dim,))
 
     # this part of the network processes the
     img_input = Input(shape=image_input_shape)
@@ -50,43 +59,103 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  num_outputs):
     vel_layer = Flatten()(vel_layer)
 
     # here, the preprocessed image and the velocities are merged into one tensor
-    concat_layer = Concatenate()([image_layer, vel_layer])
+    feature_layer = Concatenate()([image_layer, vel_layer])
+    feature_layer = Dropout(.2)(feature_layer)
+
+    # PART 1
 
     # advantage function of actions
-    adv_layer = Dropout(.3)(concat_layer)
-    adv_layer = Dense(100, activation="relu")(adv_layer)
-    adv_layer = Dropout(.3)(adv_layer)
-    adv_layer = Dense(50, activation="relu")(adv_layer)
-    adv_layer = Dropout(.3)(adv_layer)
-    adv_layer = Dense(25, activation="relu")(adv_layer)
-    adv_layer = Dense(num_outputs, activation="tanh")(adv_layer)
+    part_1_adv_layer = Dense(100, activation="relu")(feature_layer)
+    part_1_adv_layer = Dropout(.2)(part_1_adv_layer)
+    part_1_adv_layer = Dense(50, activation="relu")(part_1_adv_layer)
+    part_1_adv_layer = Dropout(.2)(part_1_adv_layer)
+    part_1_adv_layer = Dense(action_dim[0], activation="tanh")(part_1_adv_layer)
 
     # value of state
-    val_layer = Dropout(.3)(concat_layer)
-    val_layer = Dense(100, activation="relu")(concat_layer)
-    val_layer = Dropout(.3)(val_layer)
-    val_layer = Dense(50, activation="relu")(val_layer)
-    val_layer = Dropout(.3)(val_layer)
-    val_layer = Dense(25, activation="relu")(val_layer)
-    val_layer = Dense(1, activation="tanh")(val_layer)
-    val_layer = RepeatVector(num_outputs)(val_layer)
-    val_layer = Flatten()(val_layer)
-    # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
-    # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
+    part_1_val_layer = Dense(100, activation="relu")(feature_layer)
+    part_1_val_layer = Dropout(.2)(part_1_val_layer)
+    part_1_val_layer = Dense(50, activation="relu")(part_1_val_layer)
+    part_1_val_layer = Dropout(.2)(part_1_val_layer)
+    part_1_val_layer = Dense(1, activation="linear")(part_1_val_layer)
+    part_1_val_layer = RepeatVector(action_dim[0])(part_1_val_layer)
+    part_1_val_layer = Flatten()(part_1_val_layer)
 
     # merging advantage function and state value
-    q_layer = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([adv_layer, val_layer])
-    # q_layer = Activation(activation="tanh")(q_layer)
+    q_layer_action_0 = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([part_1_adv_layer, part_1_val_layer])
 
-    #q_layer = Reshape(output_dim)(q_layer)
+    # merge(inputs=[part_1_adv_layer, part_1_val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
+    #            output_shape=lambda x: x[0])
 
-    model = Model(inputs=[img_input, vel_input], outputs=[q_layer])
+    part_1_action_0 = Activation('softmax')(q_layer_action_0)
+
+    part_1_action_0 = Lambda(lambda x: x[0] * x[1] + (1 - x[0]) * x[2])([train_network, action_0, part_1_action_0])
+
+    # PART 2
+
+    part_2_input = Concatenate()([part_1_action_0, feature_layer])
+
+    # advantage function of actions
+    part_2_adv_layer = Dense(100, activation="relu")(part_2_input)
+    part_2_adv_layer = Dropout(.2)(part_2_adv_layer)
+    part_2_adv_layer = Dense(50, activation="relu")(part_2_adv_layer)
+    part_2_adv_layer = Dropout(.2)(part_2_adv_layer)
+    part_2_adv_layer = Dense(action_dim[0], activation="tanh")(part_2_adv_layer)
+
+    # value of state
+    part_2_val_layer = Dense(100, activation="relu")(part_2_input)
+    part_2_val_layer = Dropout(.2)(part_2_val_layer)
+    part_2_val_layer = Dense(50, activation="relu")(part_2_val_layer)
+    part_2_val_layer = Dropout(.2)(part_2_val_layer)
+    part_2_val_layer = Dense(1, activation="linear")(part_2_val_layer)
+    part_2_val_layer = RepeatVector(action_dim[0])(part_2_val_layer)
+    part_2_val_layer = Flatten()(part_2_val_layer)
+
+    # merging advantage function and state value
+    q_layer_action_1 = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([part_2_adv_layer, part_2_val_layer])
+
+    part_2_action_1 = Activation('softmax')(q_layer_action_1)
+
+    part_2_action_1 = Lambda(lambda x: x[0] * x[1] + (1 - x[0]) * x[2])([train_network, action_1, part_2_action_1])
+
+    # PART 3
+
+    part_3_input = Concatenate()([part_2_action_1, feature_layer])
+
+    # advantage function of actions
+    part_3_adv_layer = Dense(100, activation="relu")(part_3_input)
+    part_3_adv_layer = Dropout(.2)(part_3_adv_layer)
+    part_3_adv_layer = Dense(50, activation="relu")(part_3_adv_layer)
+    part_3_adv_layer = Dropout(.2)(part_3_adv_layer)
+    part_3_adv_layer = Dense(action_dim[0], activation="tanh")(part_3_adv_layer)
+
+    # value of state
+    part_3_val_layer = Dense(100, activation="relu")(part_3_input)
+    part_3_val_layer = Dropout(.2)(part_3_val_layer)
+    part_3_val_layer = Dense(50, activation="relu")(part_3_val_layer)
+    part_3_val_layer = Dropout(.2)(part_3_val_layer)
+    part_3_val_layer = Dense(1, activation="linear")(part_3_val_layer)
+    part_3_val_layer = RepeatVector(action_dim[0])(part_3_val_layer)
+    part_3_val_layer = Flatten()(part_3_val_layer)
+
+    # merging advantage function and state value
+    q_layer_action_2 = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([part_3_adv_layer, part_3_val_layer])
+
+    part_3_action_2 = Activation('softmax')(q_layer_action_2)
+
+    # part_3_action_2 = Lambda(lambda x: x[0] * x[1] + (1 - x[0]) * x[2])([train_network, action_2, part_3_action_2])
+
+    part_1_action_0 = Reshape((1, 3))(part_1_action_0)
+    part_2_action_1 = Reshape((1, 3))(part_2_action_1)
+    part_3_action_2 = Reshape((1, 3))(part_3_action_2)
+
+    pred_action = Concatenate(axis=1)([part_1_action_0, part_2_action_1, part_3_action_2])
+
+    model = Model(inputs=[img_input, vel_input, train_network, train_action],
+                  outputs=[pred_action])
 
     model.compile(loss='mse',
                   optimizer='adam',
                   metrics=['accuracy'])
-
-    print(model.summary())
 
     return model
 
@@ -127,13 +196,8 @@ class Training(object):
         with open(self.train_parameters) as json_data:
             self.config = json.load(json_data)
 
-        epochs = self.config["epochs"]
-        batch_size = self.config["batch_size"]
-        discount_factor = self.config["discount_factor"]
-        target_update_rate = self.config["target_update_rate"]
-
-        self.model = model_acceleration_q(self.STATE_DIMENSIONS, self.VELOCITY_DIMENSIONS, self.ACTIONS)
-        self.target_model = model_acceleration_q(self.STATE_DIMENSIONS, self.VELOCITY_DIMENSIONS, self.ACTIONS)
+        self.model = action_cascade_network(self.STATE_DIMENSIONS, self.VELOCITY_DIMENSIONS, self.ACTIONS)
+        self.target_model = action_cascade_network(self.STATE_DIMENSIONS, self.VELOCITY_DIMENSIONS, self.ACTIONS)
 
         if os.path.isfile(self.weights_file):
             self.model.load_weights(self.weights_file)
@@ -213,25 +277,10 @@ class Training(object):
 
         # training
 
-        # calculate surprise
-
-        # calculate predictions
-        predictions = self.model.predict_on_batch([self.states, self.velocities])  # Bx27
-        q_predictions = predictions[range(len(self.states)), self.actions]
-
-        # calculate expectiations
-        if self.use_target:
-            Q_suc = self.target_model.predict([self.suc_states, self.suc_velocities])  # bx27
-        else:
-            Q_suc = self.model.predict([self.suc_states, self.suc_velocities])  # bx27
-
-        # get max_Q values, discount them and set set those values to 0 where state is terminal
-        max_Q_suc = np.amax(Q_suc, axis=1) * discount_factor * np.invert(self.terminals)  # bx27
-        q_expectations = max_Q_suc + self.rewards
-
-        surprise = np.absolute(q_expectations - q_predictions)
-
-        ranks = 1/(self.states.shape[0] - np.argsort(surprise))
+        epochs = self.config["epochs"]
+        batch_size = self.config["batch_size"]
+        discount_factor = self.config["discount_factor"]
+        target_update_rate = self.config["target_update_rate"]
 
         if self.model and self.states.size:
             # init experience buffer
@@ -240,12 +289,14 @@ class Training(object):
             # draw index for sample to avoid copying large amounts of data
             self.experience_buffer.extend(range(self.states.shape[0]))
 
-            self.model.compile(loss='mean_squared_error', optimizer='sgd')
+            self.model.compile(loss='mean_squared_error', optimizer='adam')
+
+            train_flag = np.ones(batch_size)
 
             for epoch in range(epochs):
 
                 # sample a minibatch
-                minibatch = np.random.choice(self.experience_buffer, p=ranks, size=batch_size)
+                minibatch = np.random.choice(self.experience_buffer, size=batch_size)
 
                 # inputs are the states
                 batch_states = np.array([self.states[i] for i in minibatch])  # bx[40x40]
@@ -264,9 +315,9 @@ class Training(object):
 
                 # calculate Q-Values of successor states
                 if self.use_target:
-                    Q_suc = self.target_model.predict([batch_suc_states, batch_suc_velocities])  # bx27
+                    Q_suc = self.target_model.predict([batch_suc_states, batch_suc_velocities, train_flag, batch_actions])  # bx27
                 else:
-                    Q_suc = self.model.predict([batch_suc_states, batch_suc_velocities])  # bx27
+                    Q_suc = self.model.predict([batch_suc_states, batch_suc_velocities, train_flag, batch_actions])  # bx27
                 # print("Q-Values for successor states:\n", Q_suc)
                 # get max_Q values, discount them and set set those values to 0 where state is terminal
                 max_Q_suc = np.amax(Q_suc, axis=1) * discount_factor * np.invert(batch_terminals)  # bx27
@@ -281,7 +332,7 @@ class Training(object):
                 # batch_targets[range(batch_size), batch_actions] = max_Q_suc + batch_rewards
                 # print("final targets:\n", batch_targets)
 
-                self.model.train_on_batch([batch_states, batch_velocities], batch_targets)
+                self.model.train_on_batch([batch_states, batch_velocities, train_flag, batch_actions], batch_targets)
 
                 if self.use_target:
                     # update target network

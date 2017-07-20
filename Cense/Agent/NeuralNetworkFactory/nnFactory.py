@@ -1,6 +1,6 @@
 from keras.models import Sequential, Model
 from keras.layers import Input, Dense, Concatenate, Reshape, Conv2D, MaxPooling2D, Dropout, Flatten, RepeatVector, \
-    merge, Activation, Lambda
+    merge, Activation, Lambda, Multiply
 from keras.layers.merge import Average, Add
 import keras.backend as K
 from tensorflow import reduce_mean
@@ -201,8 +201,67 @@ def model_dueling_keras(input_shape, output_dim):
     return model
 
 
-def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
+def model_acceleration_q(image_input_shape, velocity_input_shape,  num_outputs):
 
+    #num_outputs = np.prod(output_dim)
+
+    # this part of the network processes the
+    img_input = Input(shape=image_input_shape)
+    image_layer = Reshape(image_input_shape + (1,))(img_input)
+    image_layer = Conv2D(30, (5, 5), activation="relu")(image_layer)
+    # image_layer = MaxPooling2D(pool_size=(2, 2))(image_layer)
+    image_layer = Conv2D(15, (5, 5), activation="relu")(image_layer)
+    # image_layer = MaxPooling2D(pool_size=(2, 2))(image_layer)
+    image_layer = Flatten()(image_layer)
+
+    # this part takes care of the velocity input values
+    vel_input = Input(shape=velocity_input_shape)
+    vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
+    vel_layer = Flatten()(vel_layer)
+
+    # here, the preprocessed image and the velocities are merged into one tensor
+    concat_layer = Concatenate()([image_layer, vel_layer])
+
+    # advantage function of actions
+    adv_layer = Dropout(.3)(concat_layer)
+    adv_layer = Dense(100, activation="relu")(adv_layer)
+    adv_layer = Dropout(.3)(adv_layer)
+    adv_layer = Dense(50, activation="relu")(adv_layer)
+    adv_layer = Dropout(.3)(adv_layer)
+    adv_layer = Dense(25, activation="relu")(adv_layer)
+    adv_layer = Dense(num_outputs, activation="tanh")(adv_layer)
+
+    # value of state
+    val_layer = Dropout(.3)(concat_layer)
+    val_layer = Dense(100, activation="relu")(concat_layer)
+    val_layer = Dropout(.3)(val_layer)
+    val_layer = Dense(50, activation="relu")(val_layer)
+    val_layer = Dropout(.3)(val_layer)
+    val_layer = Dense(25, activation="relu")(val_layer)
+    val_layer = Dense(1, activation="tanh")(val_layer)
+    val_layer = RepeatVector(num_outputs)(val_layer)
+    val_layer = Flatten()(val_layer)
+    # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
+    # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
+
+    # merging advantage function and state value
+    q_layer = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([adv_layer, val_layer])
+    # q_layer = Activation(activation="tanh")(q_layer)
+
+    #q_layer = Reshape(output_dim)(q_layer)
+
+    model = Model(inputs=[img_input, vel_input], outputs=[q_layer])
+
+    model.compile(loss='mse',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+
+    print(model.summary())
+
+    return model
+
+
+def model_acceleration_q_multidim(image_input_shape, velocity_input_shape, output_dim):
     num_outputs = np.prod(output_dim)
 
     # this part of the network processes the
@@ -219,29 +278,29 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
     vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
     vel_layer = Flatten()(vel_layer)
 
-
     # here, the preprocessed image and the velocities are merged into one tensor
     concat_layer = Concatenate()([image_layer, vel_layer])
-    concat_layer = Dropout(.3)(concat_layer)
-
 
     # advantage function of actions
-    adv_layer = Dense(100, activation="relu")(concat_layer)
+    adv_layer = Dropout(.3)(concat_layer)
+    adv_layer = Dense(100, activation="relu")(adv_layer)
+    adv_layer = Dropout(.3)(adv_layer)
     adv_layer = Dense(50, activation="relu")(adv_layer)
     adv_layer = Dense(num_outputs, activation="tanh")(adv_layer)
 
     # value of state
+    val_layer = Dropout(.3)(concat_layer)
     val_layer = Dense(100, activation="relu")(concat_layer)
+    val_layer = Dropout(.3)(val_layer)
     val_layer = Dense(50, activation="relu")(val_layer)
-    val_layer = Dense(1, activation="linear")(val_layer)
+    val_layer = Dense(1, activation="tanh")(val_layer)
     val_layer = RepeatVector(num_outputs)(val_layer)
     val_layer = Flatten()(val_layer)
     # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
     # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
 
     # merging advantage function and state value
-    q_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
-                    output_shape=lambda x: x[0])
+    q_layer = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([adv_layer, val_layer])
     # q_layer = Activation(activation="tanh")(q_layer)
 
     q_layer = Reshape(output_dim)(q_layer)
@@ -256,20 +315,144 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  output_dim):
 
     return model
 
+def action_cascade_network(image_input_shape, velocity_input_shape, action_dim):
+    # num_outputs = np.prod(output_dim)
+
+    train_network = Input(shape=(1,))
+
+    train_action = Input(shape=action_dim)
+
+    action_0 = Lambda(lambda x: x[:, 0, :])(train_action)
+    action_1 = Lambda(lambda x: x[:, 1, :])(train_action)
+
+    # action_0 = Input(shape=(action_dim,))
+    # action_1 = Input(shape=(action_dim,))
+    # #action_2 = Input(shape=(action_dim,))
+
+    # this part of the network processes the
+    img_input = Input(shape=image_input_shape)
+    image_layer = Reshape(image_input_shape + (1,))(img_input)
+    image_layer = Conv2D(30, (5, 5), activation="relu")(image_layer)
+    # image_layer = MaxPooling2D(pool_size=(2, 2))(image_layer)
+    image_layer = Conv2D(15, (5, 5), activation="relu")(image_layer)
+    # image_layer = MaxPooling2D(pool_size=(2, 2))(image_layer)
+    image_layer = Flatten()(image_layer)
+
+    # this part takes care of the velocity input values
+    vel_input = Input(shape=velocity_input_shape)
+    vel_layer = Reshape(velocity_input_shape + (1,))(vel_input)
+    vel_layer = Flatten()(vel_layer)
+
+    # here, the preprocessed image and the velocities are merged into one tensor
+    feature_layer = Concatenate()([image_layer, vel_layer])
+    feature_layer = Dropout(.2)(feature_layer)
+    
+    # PART 1
+
+    # advantage function of actions
+    part_1_adv_layer = Dense(100, activation="relu")(feature_layer)
+    part_1_adv_layer = Dropout(.2)(part_1_adv_layer)
+    part_1_adv_layer = Dense(50, activation="relu")(part_1_adv_layer)
+    part_1_adv_layer = Dropout(.2)(part_1_adv_layer)
+    part_1_adv_layer = Dense(25, activation="relu")(part_1_adv_layer)
+    part_1_adv_layer = Dropout(.2)(part_1_adv_layer)
+    part_1_adv_layer = Dense(action_dim[0], activation="tanh")(part_1_adv_layer)
+
+
+    # value of state
+    part_1_val_layer = Dense(100, activation="relu")(feature_layer)
+    part_1_val_layer = Dropout(.2)(part_1_val_layer)
+    part_1_val_layer = Dense(50, activation="relu")(part_1_val_layer)
+    part_1_val_layer = Dropout(.2)(part_1_val_layer)
+    part_1_val_layer = Dense(25, activation="relu")(part_1_val_layer)
+    part_1_val_layer = Dropout(.2)(part_1_val_layer)
+    part_1_val_layer = Dense(1, activation="linear")(part_1_val_layer)
+    part_1_val_layer = RepeatVector(action_dim[0])(part_1_val_layer)
+    part_1_val_layer = Flatten()(part_1_val_layer)
+
+    # merging advantage function and state value
+    q_layer_action_0 = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([part_1_adv_layer, part_1_val_layer])
+
+        #merge(inputs=[part_1_adv_layer, part_1_val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
+        #            output_shape=lambda x: x[0])
+
+    part_1_action_0 = Activation('softmax')(q_layer_action_0)
+
+    part_1_action_0 = Lambda(lambda x: x[0]*x[1] + (1-x[0])*x[2])([train_network, action_0, part_1_action_0])
+    
+    # PART 2
+
+    part_2_input = Concatenate()([part_1_action_0, feature_layer])
+
+    # advantage function of actions
+    part_2_adv_layer = Dense(100, activation="relu")(part_2_input)
+    part_2_adv_layer = Dropout(.2)(part_2_adv_layer)
+    part_2_adv_layer = Dense(50, activation="relu")(part_2_adv_layer)
+    part_2_adv_layer = Dropout(.2)(part_2_adv_layer)
+    part_2_adv_layer = Dense(action_dim[0], activation="tanh")(part_2_adv_layer)
+
+    # value of state
+    part_2_val_layer = Dense(100, activation="relu")(part_2_input)
+    part_2_val_layer = Dropout(.2)(part_2_val_layer)
+    part_2_val_layer = Dense(50, activation="relu")(part_2_val_layer)
+    part_2_val_layer = Dropout(.2)(part_2_val_layer)
+    part_2_val_layer = Dense(1, activation="linear")(part_2_val_layer)
+    part_2_val_layer = RepeatVector(action_dim[0])(part_2_val_layer)
+    part_2_val_layer = Flatten()(part_2_val_layer)
+
+    # merging advantage function and state value
+    q_layer_action_1 = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([part_2_adv_layer, part_2_val_layer])
+
+    part_2_action_1 = Activation('softmax')(q_layer_action_1)
+
+    part_2_action_1 = Lambda(lambda x: x[0] * x[1] + (1 - x[0]) * x[2])([train_network, action_1, part_2_action_1])
+
+    # PART 3
+
+    part_3_input = Concatenate()([part_2_action_1, feature_layer])
+
+    # advantage function of actions
+    part_3_adv_layer = Dense(100, activation="relu")(part_3_input)
+    part_3_adv_layer = Dropout(.2)(part_3_adv_layer)
+    part_3_adv_layer = Dense(50, activation="relu")(part_3_adv_layer)
+    part_3_adv_layer = Dropout(.2)(part_3_adv_layer)
+    part_3_adv_layer = Dense(action_dim[0], activation="tanh")(part_3_adv_layer)
+
+    # value of state
+    part_3_val_layer = Dense(100, activation="relu")(part_3_input)
+    part_3_val_layer = Dropout(.2)(part_3_val_layer)
+    part_3_val_layer = Dense(50, activation="relu")(part_3_val_layer)
+    part_3_val_layer = Dropout(.2)(part_3_val_layer)
+    part_3_val_layer = Dense(1, activation="linear")(part_3_val_layer)
+    part_3_val_layer = RepeatVector(action_dim[0])(part_3_val_layer)
+    part_3_val_layer = Flatten()(part_3_val_layer)
+
+    # merging advantage function and state value
+    q_layer_action_2 = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([part_3_adv_layer, part_3_val_layer])
+
+    part_3_action_2 = Activation('softmax')(q_layer_action_2)
+
+    #part_3_action_2 = Lambda(lambda x: x[0] * x[1] + (1 - x[0]) * x[2])([train_network, action_2, part_3_action_2])
+
+    part_1_action_0 = Reshape((1, 3))(part_1_action_0)
+    part_2_action_1 = Reshape((1, 3))(part_2_action_1)
+    part_3_action_2 = Reshape((1, 3))(part_3_action_2)
+
+    pred_action = Concatenate(axis=1)([part_1_action_0, part_2_action_1, part_3_action_2])
+
+    model = Model(inputs=[img_input, vel_input, train_network, train_action],
+                  outputs=[pred_action])
+
+    model.compile(loss='mse',
+                  optimizer='adam',
+                  metrics=['accuracy'])
+
+    return model
+
 
 if __name__ == "__main__":
 
-    print(model_dueling_keras((40, 40), 5).summary())
-
-    model = model_acceleration_q((40, 40), (3,), 5)
-
-    X = np.random.random((10, 40, 40)).astype('float32')
-    V = np.random.random((10,3)).astype('float32')
-
-    # y = np.random.random((100, 6, 1))
-    # print(X.shape)
-
-    # X = X.reshape(len(X), 1, 40, 40).astype('float32')
+    model = action_cascade_network((40,40), (3,), (3,3))
 
     print(model.summary())
 
@@ -277,13 +460,44 @@ if __name__ == "__main__":
         X = np.random.random((100, 40, 40)).astype('float32')
         V = np.random.random((100,3)).astype('float32')
         y = np.random.random((100, 5)).astype('float32')
-        model.fit(x=[X,V], y=y)
+        train = np.ones(100)
+        action = np.random.random((100,3,3))
+
+        model.fit(x=[X,V,train,action], y=[action])
 
     for i in range(5):
         X = np.random.random((1, 40, 40)).astype('float32')
         V = np.random.random((1,3)).astype('float32')
-        y = model.predict(x=[X,V])
-        print(y.argmax(axis=1))
+        train = np.zeros(100)
+        action = np.zeros((100, 3, 3))
+        y = model.predict(x=[X,V,train,action])
+        print(np.argmax(y, axis=0))
+
+    # print(model_dueling_keras((40, 40), 5).summary())
+    #
+    # model = model_acceleration_q((40, 40), (3,), 5)
+    #
+    # X = np.random.random((10, 40, 40)).astype('float32')
+    # V = np.random.random((10,3)).astype('float32')
+    #
+    # # y = np.random.random((100, 6, 1))
+    # # print(X.shape)
+    #
+    # # X = X.reshape(len(X), 1, 40, 40).astype('float32')
+    #
+    # print(model.summary())
+    #
+    # for i in range(5):
+    #     X = np.random.random((100, 40, 40)).astype('float32')
+    #     V = np.random.random((100,3)).astype('float32')
+    #     y = np.random.random((100, 5)).astype('float32')
+    #     model.fit(x=[X,V], y=y)
+    #
+    # for i in range(5):
+    #     X = np.random.random((1, 40, 40)).astype('float32')
+    #     V = np.random.random((1,3)).astype('float32')
+    #     y = model.predict(x=[X,V])
+    #     print(y.argmax(axis=1))
 
 
 def baseline_model():

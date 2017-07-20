@@ -4,12 +4,14 @@ import numpy as np
 from copy import deepcopy
 
 from Cense.Environment.Camera.camera_videocapture import Camera as Camera
-from Cense.Environment.Robot.rtdeController import RtdeController as Controller, IllegalPoseException, SpawnedInTerminalStateError, ExitedInTerminalStateError
+from Cense.Environment.Robot.rtdeController import RtdeController as Controller, IllegalPoseException, \
+    SpawnedInTerminalStateError, ExitedInTerminalStateError
 
 
 class InsufficientProgressError(Exception):
     def __init__(self, *args):
         super(InsufficientProgressError, self).__init__(*args)
+
 
 class UntreatableStateError(Exception):
     def __init__(self, *args):
@@ -21,7 +23,7 @@ class RealEnvironment(object):
     Y_ENGAGED = -.35
 
     START_POSE = np.array([.3, Y_ENGAGED, .458, 0, np.pi / 2, 0])
-    #PREVIOUS_START_POSE = START_POSE
+    # PREVIOUS_START_POSE = START_POSE
 
     CURRENT_START_POSE = START_POSE
     CURRENT_START_VELOCITY = np.zeros(3)
@@ -31,7 +33,7 @@ class RealEnvironment(object):
 
     STATE_DIMENSIONS = (50, 50)
     VELOCITY_DIMENSIONS = (3,)
-    ACTIONS = 27
+    ACTIONS = (3, 3)
 
     __checkpoints = []
 
@@ -43,7 +45,7 @@ class RealEnvironment(object):
 
     velocity = np.zeros(3)
 
-    def __init__(self, environment_config, set_status_func):
+    def __init__(self, environment_config, set_status_func, update_velocity):
 
         self.CHECKPOINT_DISTANCE = environment_config["checkpoint_distance"]
 
@@ -67,6 +69,7 @@ class RealEnvironment(object):
         self.MAX_ABS_ROTATION_VELOCITY = environment_config["max_abs_rotation_velocity"] * np.pi / 180
 
         self.set_status_func = set_status_func
+        self.update_velocity = update_velocity
 
         logging.debug("Real Environment - init")
 
@@ -91,44 +94,28 @@ class RealEnvironment(object):
         old_velocity = np.empty_like(self.velocity)
         np.copyto(old_velocity, self.velocity)
 
-        # calculate new velocity [mm/step]
-        # 27 actions = 3x3x3
-        # 0-8: accelerate forward
-        # 9-17: brake forward
-        # 18-26: do nothing forward
-
-        # each block has 9 entries. For each:
-        # 0-2: accelerate right
-        # 3-5: accelerate left
-        # 6-8: do nothing sideways
-
-        # each subblock has 3 entries. For each:
-        # 0: accelerate rotation right
-        # 1: accelerate rotation left
-        # 2: do nothing rotation
-
-        # forward
-        if action // 9 == 0:
+        if action[0] == 0:
             self.velocity[0] += self.TRANSLATION_ACCELERATION_FORWARD
-        elif action // 9 == 1:
+        elif action[0] == 1:
             self.velocity[0] -= self.TRANSLATION_ACCELERATION_FORWARD
         self.velocity[0] = max(min(self.velocity[0], self.MAX_TRANSLATION_VELOCITY_FORWARD),
-                                 self.MIN_TRANSLATION_VELOCITY_FORWARD)
+                               self.MIN_TRANSLATION_VELOCITY_FORWARD)
 
-        # sideways
-        if (action % 9) // 3 == 0:
+        if action[1] == 0:
             self.velocity[1] += self.TRANSLATION_ACCELERATION_SIDEWAYS
-        elif (action % 9) // 3 == 1:
+        elif action[1] == 1:
             self.velocity[1] -= self.TRANSLATION_ACCELERATION_SIDEWAYS
         self.velocity[1] = max(min(self.velocity[1], self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS),
-                                 -self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS)
+                               -self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS)
 
-        if action % 3 == 0:
+        if action[2] == 0:
             self.velocity[2] += self.ROTATION_ACCELERATION
-        elif action % 3 == 1:
+        elif action[2] == 1:
             self.velocity[2] -= self.ROTATION_ACCELERATION
         self.velocity[2] = max(min(self.velocity[2], self.MAX_ABS_ROTATION_VELOCITY),
-                                 -self.MAX_ABS_ROTATION_VELOCITY)
+                               -self.MAX_ABS_ROTATION_VELOCITY)
+
+        self.update_velocity(self.velocity)
 
         # new pose:
         next_pose, _ = self.controller.current_pose()
@@ -151,12 +138,9 @@ class RealEnvironment(object):
                 reward = self.PUNISHMENT_WIRE
                 terminal = True
                 self.reset_stepwatchdog()
-
-                if np.random.random() < .7:
-                    # restore velocity to avoid that the robot accelerates up to maximum velocity
-                    np.copyto(self.velocity, old_velocity)
-                else:
-                    self.velocity = np.zeros(3)
+                # # restore velocity to avoid that the robot accelerates up to maximum velocity
+                # np.copyto(self.velocity, old_velocity)
+                self.velocity = np.zeros(3)
 
             elif self.is_at_goal():
                 reward = self.REWARD_GOAL
@@ -173,8 +157,8 @@ class RealEnvironment(object):
                 self.advance_checkpoints()
                 self.reset_stepwatchdog()
             else:
-                reward = -self.CURRENT_STEP_WATCHDOG/self.STEP_WATCHDOG
-                #reward = self.REWARD_GENERIC
+                reward = -self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG
+                # reward = self.REWARD_GENERIC
 
             if self.CURRENT_STEP_WATCHDOG >= self.STEP_WATCHDOG:
                 self.reset_stepwatchdog()
@@ -195,8 +179,8 @@ class RealEnvironment(object):
 
     def get_normalized_velocity(self):
         normalized_velocity = [self.velocity[0] / self.MAX_TRANSLATION_VELOCITY_FORWARD,
-                                 self.velocity[1] / self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS,
-                                 self.velocity[2] / self.MAX_ABS_ROTATION_VELOCITY]
+                               self.velocity[1] / self.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS,
+                               self.velocity[2] / self.MAX_ABS_ROTATION_VELOCITY]
 
         return normalized_velocity
 
@@ -224,7 +208,7 @@ class RealEnvironment(object):
         current_pose, touching_wire = self.controller.current_pose()
         if len(self.__checkpoints) > 1:
             return np.linalg.norm(current_pose[:3] - self.__checkpoints[-1][:3]) > \
-                   2*np.linalg.norm(current_pose[:3] - self.__checkpoints[-2][:3]) and not touching_wire
+                   2 * np.linalg.norm(current_pose[:3] - self.__checkpoints[-2][:3]) and not touching_wire
 
     def advance_checkpoints(self):
         logging.debug("Real Environment - advance_checkpoints")
@@ -296,7 +280,7 @@ class RealEnvironment(object):
         current_pose, touching_wire = self.controller.current_pose()
 
         if not touching_wire:
-            #self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
+            # self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
             self.CURRENT_START_POSE = current_pose
             self.CURRENT_START_VELOCITY = deepcopy(self.velocity)
         else:
@@ -304,7 +288,7 @@ class RealEnvironment(object):
 
     def reset_current_start_pose(self):
         logging.debug("Real Environment - reset_current_start_pose")
-        #self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
+        # self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
         self.CURRENT_START_POSE = deepcopy(self.START_POSE)
         self.CURRENT_START_VELOCITY = np.zeros(3)
 
@@ -314,21 +298,21 @@ if __name__ == "__main__":
 
     config = {
 
-    "checkpoint_distance": 0.03,
+        "checkpoint_distance": 0.03,
 
-    "punishment_wire": -1,
-    "punishment_insufficient_progress": -0.5,
-    "punishment_old_checkpoint": -0.5,
-    "reward_goal": 1,
-    "reward_new_checkpoint": 1,
-    "reward_generic": -0.1,
+        "punishment_wire": -1,
+        "punishment_insufficient_progress": -0.5,
+        "punishment_old_checkpoint": -0.5,
+        "reward_goal": 1,
+        "reward_new_checkpoint": 1,
+        "reward_generic": -0.1,
 
-    "step_watchdog": 10,
+        "step_watchdog": 10,
 
-    "translation_distance": 0.01,
-    "rotation_angle": 30
-  }
+        "translation_distance": 0.01,
+        "rotation_angle": 30
+    }
 
     world = RealEnvironment(config, print)
 
-    #world.execute(3)
+    # world.execute(3)

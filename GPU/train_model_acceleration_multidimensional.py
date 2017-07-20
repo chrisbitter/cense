@@ -31,9 +31,8 @@ class MissingFileException(Exception):
 
 
 # v1
-def model_acceleration_q(image_input_shape, velocity_input_shape,  num_outputs):
-
-    #num_outputs = np.prod(output_dim)
+def model_acceleration_q(image_input_shape, velocity_input_shape, output_dim):
+    num_outputs = np.prod(output_dim)
 
     # this part of the network processes the
     img_input = Input(shape=image_input_shape)
@@ -53,40 +52,33 @@ def model_acceleration_q(image_input_shape, velocity_input_shape,  num_outputs):
     concat_layer = Concatenate()([image_layer, vel_layer])
 
     # advantage function of actions
-    adv_layer = Dropout(.3)(concat_layer)
-    adv_layer = Dense(100, activation="relu")(adv_layer)
-    adv_layer = Dropout(.3)(adv_layer)
+    adv_layer = Dense(100, activation="relu")(concat_layer)
     adv_layer = Dense(50, activation="relu")(adv_layer)
-    adv_layer = Dropout(.3)(adv_layer)
-    adv_layer = Dense(25, activation="relu")(adv_layer)
     adv_layer = Dense(num_outputs, activation="tanh")(adv_layer)
 
     # value of state
-    val_layer = Dropout(.3)(concat_layer)
     val_layer = Dense(100, activation="relu")(concat_layer)
-    val_layer = Dropout(.3)(val_layer)
     val_layer = Dense(50, activation="relu")(val_layer)
-    val_layer = Dropout(.3)(val_layer)
-    val_layer = Dense(25, activation="relu")(val_layer)
-    val_layer = Dense(1, activation="tanh")(val_layer)
+    val_layer = Dense(1, activation="linear")(val_layer)
     val_layer = RepeatVector(num_outputs)(val_layer)
     val_layer = Flatten()(val_layer)
     # q = v + a - mean(a, reduction_indices=1, keep_dims=True)
     # q_layer = val_layer + adv_layer - reduce_mean(adv_layer, keep_dims=True)
 
     # merging advantage function and state value
-    q_layer = Lambda(lambda x: x[1] + x[0] - K.mean(x[0]))([adv_layer, val_layer])
+    q_layer = merge(inputs=[adv_layer, val_layer], mode=lambda x: x[1] + x[0] - K.mean(x[0], keepdims=True),
+                    output_shape=lambda x: x[0])
     # q_layer = Activation(activation="tanh")(q_layer)
 
-    #q_layer = Reshape(output_dim)(q_layer)
+    q_layer = Reshape(output_dim)(q_layer)
 
     model = Model(inputs=[img_input, vel_input], outputs=[q_layer])
 
-    model.compile(loss='mse',
-                  optimizer='adam',
-                  metrics=['accuracy'])
-
-    print(model.summary())
+    # model.compile(loss='mse',
+    #               optimizer='adam',
+    #               metrics=['accuracy'])
+    #
+    # print(model.summary())
 
     return model
 
@@ -96,7 +88,7 @@ class Training(object):
 
     STATE_DIMENSIONS = (50, 50)
     VELOCITY_DIMENSIONS = (3,)
-    ACTIONS = 27
+    ACTIONS = (3, 3)
 
     root_folder = "/home/useradmin/Dokumente/rm505424/CENSE/Christian/training_data/"
 
@@ -125,12 +117,7 @@ class Training(object):
     def run(self):
         # create models
         with open(self.train_parameters) as json_data:
-            self.config = json.load(json_data)
-
-        epochs = self.config["epochs"]
-        batch_size = self.config["batch_size"]
-        discount_factor = self.config["discount_factor"]
-        target_update_rate = self.config["target_update_rate"]
+            config = json.load(json_data)
 
         self.model = model_acceleration_q(self.STATE_DIMENSIONS, self.VELOCITY_DIMENSIONS, self.ACTIONS)
         self.target_model = model_acceleration_q(self.STATE_DIMENSIONS, self.VELOCITY_DIMENSIONS, self.ACTIONS)
@@ -140,7 +127,7 @@ class Training(object):
         else:
             raise MissingFileException("Missing file: Weights")
 
-        self.use_target = self.config["use_target"]
+        self.use_target = config["use_target"]
 
         if self.use_target:
             if os.path.isfile(self.target_weights_file):
@@ -185,19 +172,6 @@ class Training(object):
                 # all data will be saved in data.h5, so no need for old data file
                 os.remove(self.new_data_folder + new_data_file)
 
-        # buffer_size = self.config["buffer_size"]
-
-        # throw away old data points if buffer is full
-        # if len(self.states) > buffer_size:
-        #    self.states = self.states[-buffer_size:]
-        #    self.velocities = self.velocities[-buffer_size:]
-        #    self.actions = self.actions[-buffer_size:]
-        #    self.rewards = self.rewards[-buffer_size:]
-        #    self.suc_states = self.suc_states[-buffer_size:]
-        #    self.suc_velocities = self.suc_velocities[-buffer_size:]
-        #    self.terminals = self.terminals[-buffer_size:]
-
-
         if self.states is None or not self.states.size:
             raise MissingFileException("Missing file: No data to process")
 
@@ -213,25 +187,10 @@ class Training(object):
 
         # training
 
-        # calculate surprise
-
-        # calculate predictions
-        predictions = self.model.predict_on_batch([self.states, self.velocities])  # Bx27
-        q_predictions = predictions[range(len(self.states)), self.actions]
-
-        # calculate expectiations
-        if self.use_target:
-            Q_suc = self.target_model.predict([self.suc_states, self.suc_velocities])  # bx27
-        else:
-            Q_suc = self.model.predict([self.suc_states, self.suc_velocities])  # bx27
-
-        # get max_Q values, discount them and set set those values to 0 where state is terminal
-        max_Q_suc = np.amax(Q_suc, axis=1) * discount_factor * np.invert(self.terminals)  # bx27
-        q_expectations = max_Q_suc + self.rewards
-
-        surprise = np.absolute(q_expectations - q_predictions)
-
-        ranks = 1/(self.states.shape[0] - np.argsort(surprise))
+        epochs = config["epochs"]
+        batch_size = config["batch_size"]
+        discount_factor = config["discount_factor"]
+        target_update_rate = config["target_update_rate"]
 
         if self.model and self.states.size:
             # init experience buffer
@@ -240,48 +199,48 @@ class Training(object):
             # draw index for sample to avoid copying large amounts of data
             self.experience_buffer.extend(range(self.states.shape[0]))
 
-            self.model.compile(loss='mean_squared_error', optimizer='sgd')
+            self.model.compile(loss='mean_squared_error', optimizer='adam')
 
             for epoch in range(epochs):
 
                 # sample a minibatch
-                minibatch = np.random.choice(self.experience_buffer, p=ranks, size=batch_size)
+                minibatch = np.random.choice(self.experience_buffer, size=batch_size)
 
                 # inputs are the states
-                batch_states = np.array([self.states[i] for i in minibatch])  # bx[40x40]
-                batch_velocities = np.array([self.velocities[i] for i in minibatch])  # bx[3x1]
-                batch_targets = self.model.predict_on_batch([batch_states, batch_velocities])  # bx27
+                batch_states = np.array([[self.states[i], self.velocities[i]] for i in minibatch])  # bx[40x40, 3x1]
+                batch_targets = self.model.predict_on_batch(batch_states)  # bx3x3
 
                 batch_actions = np.array([self.actions[i] for i in minibatch])  # bx3
 
                 # print("Batch targets Q-Network:\n", batch_targets)
 
                 # get corresponding successor states for minibatch
-                batch_suc_states = np.array([self.suc_states[i] for i in minibatch])  # bx[40x40]
-                batch_suc_velocities = np.array([self.suc_velocities[i] for i in minibatch])  # bx[3x1]
+                batch_suc_states = np.array(
+                    [[self.suc_states[i], self.suc_velocities[i]] for i in minibatch])  # bx[40x40,3x1]
                 batch_terminals = np.array([self.terminals[i] for i in minibatch]).astype('bool')  # bx1
                 batch_rewards = np.array([self.rewards[i] for i in minibatch])  # bx1
 
                 # calculate Q-Values of successor states
                 if self.use_target:
-                    Q_suc = self.target_model.predict([batch_suc_states, batch_suc_velocities])  # bx27
+                    q_suc = self.target_model.predict(batch_suc_states)  # bx3x3
                 else:
-                    Q_suc = self.model.predict([batch_suc_states, batch_suc_velocities])  # bx27
+                    q_suc = self.model.predict(batch_suc_states)  # bx3x3
                 # print("Q-Values for successor states:\n", Q_suc)
                 # get max_Q values, discount them and set set those values to 0 where state is terminal
-                max_Q_suc = np.amax(Q_suc, axis=1) * discount_factor * np.invert(batch_terminals)  # bx27
+                max_q_suc = np.amax(q_suc, axis=2) * discount_factor * np.repeat(
+                    np.expand_dims(np.invert(batch_terminals), axis=1), 3, axis=1)  # bx3
 
                 # print("max Q-Values for successor states (discounted)\n", max_Q_suc)
                 # argmax_Q_suc = np.argmax(Q_suc, axis=1)
                 # print("argmax Q-Values for successor states\n", argmax_Q_suc)
 
                 for i in range(batch_size):
-                    batch_targets[range(batch_size), batch_actions] = max_Q_suc + batch_rewards
+                    batch_targets[i][range(self.ACTIONS[0]), batch_actions[i]] = max_q_suc[i] + batch_rewards[i]
 
                 # batch_targets[range(batch_size), batch_actions] = max_Q_suc + batch_rewards
                 # print("final targets:\n", batch_targets)
 
-                self.model.train_on_batch([batch_states, batch_velocities], batch_targets)
+                self.model.train_on_batch(batch_states, batch_targets)
 
                 if self.use_target:
                     # update target network

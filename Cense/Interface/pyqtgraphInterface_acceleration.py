@@ -83,6 +83,8 @@ class Interface():
 
         velocity_plot_item = velocity_widget.getPlotItem()
 
+        velocity_plot_item.setRange(xRange=(-2,2), yRange=(-1,4))
+
         a1 = pg.ArrowItem(angle=90, tipAngle=30, baseAngle=20, headLen=40, tailLen=20, tailWidth=8, pen=None,brush='b')
         self.new_pose_arrow = pg.ArrowItem(angle=90, tipAngle=30, baseAngle=20, headLen=40, tailLen=20, tailWidth=8, pen=None, brush='r')
 
@@ -142,7 +144,7 @@ class Interface():
 
         #layout.addWidget(steps_widget, 1, 1)
         #layout.addWidget(state_plot_widget, 1, 2)
-        #layout.addWidget(exploration_widget, 1, 3)
+        layout.addWidget(exploration_widget, 1, 3)
         layout.addWidget(test_steps_widget, 2, 1)
         layout.addWidget(velocity_widget, 2, 2)
         layout.addWidget(self.text_widget, 2, 3)
@@ -197,16 +199,16 @@ class Interface():
     @check_interface_status
     def update_exploration(self, run_number, exploration_probability):
 
-        print("E-prob:", exploration_probability)
+        #print("E-prob:", exploration_probability)
 
-        # x, y = self.exploration_curve.getData()
-        # if x is not None and y is not None:
-        #     x = np.append(x, run_number)
-        #     y = np.append(y, exploration_probability)
-        #
-        #     self.exploration_curve.setData(x=x, y=y)
-        # else:
-        #     self.exploration_curve.setData(x=[run_number], y=[exploration_probability])
+        x, y = self.exploration_curve.getData()
+        if x is not None and y is not None:
+            x = np.append(x, run_number)
+            y = np.append(y, exploration_probability)
+
+            self.exploration_curve.setData(x=x, y=y)
+        else:
+            self.exploration_curve.setData(x=[run_number], y=[exploration_probability])
 
     @check_interface_status
     def update_velocity(self, velocity):

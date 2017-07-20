@@ -87,7 +87,7 @@ class GpuTrainer(object):
         ssh.connect(self.host, self.port, self.username, self.password)
 
         command = "python " + self.script_reset
-        print(command)
+        #print(command)
         stdin, stdout, stderr = ssh.exec_command(command)
 
         exit_status = stdout.channel.recv_exit_status()
@@ -121,6 +121,10 @@ class GpuTrainer(object):
             config_changed = True
 
         # Send experience & configuration to GPU
+
+        if os.path.isfile(self.new_data_local):
+            os.remove(self.new_data_local)
+
         # pack data into hdf file (overwrites existing data!)
         with h5py.File(self.new_data_local, 'w') as f:
             f.create_dataset('states', data=states)
@@ -133,6 +137,8 @@ class GpuTrainer(object):
                 f.create_dataset('velocities', data=velocities)
             if suc_velocities is not None:
                 f.create_dataset('suc_velocities', data=suc_velocities)
+
+        print(os.path.getsize(self.new_data_local))
 
         # init sftp
         transport = paramiko.Transport((self.host, self.port))

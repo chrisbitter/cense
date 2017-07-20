@@ -10,8 +10,8 @@ import numpy as np
 
 import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
 from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
-from Cense.Environment.realEnvironment_acceleration import RealEnvironment as World
-from Cense.Environment.realEnvironment_acceleration import *
+from Cense.Environment.realEnvironment_cascade import RealEnvironment as World
+from Cense.Environment.realEnvironment_cascade import *
 from Cense.Interface.pyqtgraphInterface_acceleration import Interface as Interface
 
 # silence tf compile warnings
@@ -24,7 +24,7 @@ class DeepQNetworkAgent(object):
     model_file = "../../Resources/nn-data/model.json"
     weights_file = "../../Resources/nn-data/weights.h5"
     # trained_weights_file = "../../Resources/nn-data/trained_weights.h5"
-    train_parameters = "../../Resources/train_parameters_acceleration.json"
+    train_parameters = "../../Resources/train_parameters_cascade.json"
 
     data_storage = "../../Experiment_Data/"
 
@@ -68,8 +68,7 @@ class DeepQNetworkAgent(object):
 
         self.world = World(config["environment"], self.interface.set_status)
 
-        self.model = Factory.model_acceleration_q(self.world.STATE_DIMENSIONS, self.world.VELOCITY_DIMENSIONS,
-                                                  self.world.ACTIONS)
+        self.model = Factory.action_cascade_network(self.world.STATE_DIMENSIONS, self.world.VELOCITY_DIMENSIONS, self.world.ACTIONS)
 
         # if there's already a model, use it. Else create new model
         if collector_config["resume_training"] and os.path.isfile(self.weights_file):
@@ -236,8 +235,8 @@ class DeepQNetworkAgent(object):
                     self.model.load_weights(self.weights_file)
 
                     # deep copy experience
-                    gpu_states = (np.array(states)[:, 0]).tolist()
-                    gpu_velocities = (np.array(states)[:, 1]).tolist()
+                    gpu_states = (np.array(states)[:,0]).tolist()
+                    gpu_velocities = (np.array(states)[:,1]).tolist()
                     gpu_actions = actions.copy()
                     gpu_rewards = rewards.copy()
                     gpu_suc_states = (np.array(suc_states)[:, 0]).tolist()
@@ -245,8 +244,7 @@ class DeepQNetworkAgent(object):
                     gpu_terminals = terminals.copy()
 
                     Thread(target=self.trainer.train,
-                           args=(gpu_states, gpu_actions, gpu_rewards, gpu_suc_states, gpu_terminals, gpu_velocities,
-                                 gpu_suc_velocities)).start()
+                           args=(gpu_states, gpu_actions, gpu_rewards, gpu_suc_states, gpu_terminals, gpu_velocities, gpu_suc_velocities)).start()
 
                     training_number += 1
 
@@ -315,6 +313,7 @@ class DeepQNetworkAgent(object):
         while self.interface.running_status is not 'exit':
             pass
 
+
     def start_training(self):
         self.start = True
 
@@ -350,63 +349,23 @@ class DeepQNetworkAgent(object):
 
             self.interface.update_state(state)
 
-            q_values = self.model.predict([np.expand_dims(state[0], axis=0), np.expand_dims(state[1], axis=0)])
+            q_values = self.model.predict([np.expand_dims(state[0], axis=0), np.expand_dims(state[1], axis=0), np.zeros(1), np.zeros((1,3,3))])
 
             if np.any(np.isnan(q_values)):
                 raise ValueError("Net is broken!")
 
             # explore with exploration_probability, else exploit
 
-            explore = False
-
             if np.random.random() < exploration_probability:
                 # explore
-                action = np.random.randint(self.world.ACTIONS)
-                explore = True
+                action = np.random.randint(self.world.ACTIONS[1], size=self.world.ACTIONS[0])
             else:
                 # exploit
-                action = np.argmax(q_values[0])
+                action = [np.argmax(q_values[0][i]) for i in range(self.world.ACTIONS[0])]
 
-            vel = self.world.velocity.copy()
 
-            action_string = []
-            if action // 9 == 0:
-                action_string.append("f")
-                vel += self.world.TRANSLATION_ACCELERATION_FORWARD
-            elif action // 9 == 1:
-                action_string.append("b")
-                vel -= self.world.TRANSLATION_ACCELERATION_FORWARD
-            else:
-                action_string.append("-")
-            vel[0] = max(min(vel[0], self.world.MAX_TRANSLATION_VELOCITY_FORWARD),
-                         self.world.MIN_TRANSLATION_VELOCITY_FORWARD)
 
-            # sideways
-            if (action % 9) // 3 == 0:
-                action_string.append("r")
-                vel[1] += self.world.TRANSLATION_ACCELERATION_SIDEWAYS
-            elif (action % 9) // 3 == 1:
-                action_string.append("l")
-                vel[1] -= self.world.TRANSLATION_ACCELERATION_SIDEWAYS
-            else:
-                action_string.append("-")
-            vel[1] = max(min(vel[1], self.world.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS),
-                                   -self.world.MAX_ABS_TRANSLATION_VELOCITY_SIDEWAYS)
-
-            if action % 3 == 0:
-                action_string.append("rr")
-                vel[2] += self.world.ROTATION_ACCELERATION
-            elif action % 3 == 1:
-                action_string.append("rl")
-                vel[2] -= self.world.ROTATION_ACCELERATION
-            else:
-                action_string.append("-")
-            vel[2] = max(min(vel[2], self.world.MAX_ABS_ROTATION_VELOCITY),
-                                   -self.world.MAX_ABS_ROTATION_VELOCITY)
-
-            #print(action_string, explore)
-
-            self.interface.update_velocity(vel)
+            self.interface.update_velocity(self.world.velocity)
 
             try:
                 suc_state, reward, terminal = self.world.execute(action)
@@ -454,6 +413,7 @@ class DeepQNetworkAgent(object):
         logging.debug('run_until_terminal done')
 
         return states, actions, rewards, suc_states, terminals, run_steps, run_reward
+
 
     def play(self):
 
