@@ -165,6 +165,7 @@ class RtdeController(object):
             if self.loop.is_touching_wire() and not force:
                 raise SpawnedInTerminalStateError
 
+            mean_percentage_traveled = 1
             timestamp = time.time()
 
             while True:
@@ -192,6 +193,14 @@ class RtdeController(object):
 
                 self.abort_movement()
 
+                state = self.connection.receive()
+                abort_pose = np.array(state.__dict__[b'actual_TCP_pose'])
+
+                distance_traveled = np.absolute(abort_pose - start_pose)
+                distance_expected = np.absolute(target_pose - start_pose) + np.finfo(float).eps
+
+                mean_percentage_traveled = np.mean(np.clip(distance_traveled/distance_expected, 0, 1))
+
                 for i in range(6):
                     self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = start_pose[i]
 
@@ -211,7 +220,7 @@ class RtdeController(object):
             if self.loop.is_touching_wire() and not force:
                 raise ExitedInTerminalStateError
 
-            return touched_wire
+            return touched_wire, mean_percentage_traveled
 
     def abort_movement(self):
         logging.debug('abort')

@@ -29,12 +29,12 @@ class Camera(object):
 
         gray = np.dot(rgb[..., :3], [.299, .587, .114])
 
-        return imresize(gray, self.SIZE) / 255
+        return (imresize(gray, self.SIZE) / 255)*2 - 1
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    cam = Camera((50, 50), print)
+    cam = Camera((60, 60), print)
 
     state = cam.capture_image()
     plt.imshow(state, cmap='gray')

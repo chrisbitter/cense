@@ -12,8 +12,8 @@
     "continue_after_success": 0
   },
   "trainer": {
-    "epochs_start": 500,
-    "epochs_end": 1000,
+    "epochs_start": 100,
+    "epochs_end": 500,
     "batch_size_start": 25,
     "batch_size_end": 100,
     "trainings_before_param_update": 5,
@@ -39,7 +39,7 @@
       "model_weights_remote": "training_data/model/weights.h5",
       "training_params_remote": "training_data/train_params.json",
 
-      "script_remote": "train_model_distance.py",
+      "script_remote": "train_model_velocity.py",
       "test_script_remote": "test_model.py",
       "script_reset": "reset.py"
     }
@@ -49,7 +49,7 @@
     "checkpoint_distance": 0.03,
 
     "punishment_wire": -1,
-    "punishment_insufficient_progress": -0.5,
+    "punishment_insufficient_progress": -1,
     "punishment_old_checkpoint": -0.5,
     "reward_goal": 1,
     "reward_new_checkpoint": 1,
