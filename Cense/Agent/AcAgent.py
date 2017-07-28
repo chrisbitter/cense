@@ -370,15 +370,15 @@ class ActorCriticAgent(object):
 
             # print(action_original.shape)
 
-            noise = np.empty_like(action_original)
+            # noise = np.empty_like(action_original)
 
             # for i in range(len(action_original)):
             #     # Ornstein-Uhlenbeck noise generation
             #     noise[i] = 0.15 * (0 - action_original[i]) + 0.2 * np.random.randn(1)
 
-            noise[0] = 0.15 * (.5 - action_original[0]) + 0.7 * np.random.randn(1) # forward
-            noise[1] = 0.15 * (0 - action_original[1]) + 0.7 * np.random.randn(1) # sideways
-            noise[2] = 0.15 * (0 - action_original[2]) + 0.7 * np.random.randn(1) # rotation
+            # noise[0] = 0.15 * (.5 - action_original[0]) + 0.7 * np.random.randn(1) # forward
+            # noise[1] = 0.15 * (0 - action_original[1]) + 0.7 * np.random.randn(1) # sideways
+            # noise[2] = 0.15 * (0 - action_original[2]) + 0.7 * np.random.randn(1) # rotation
 
             #noise[0] = np.random.random() - .5
             #noise[1] = 3 * np.random.random() - 1.5
@@ -388,9 +388,9 @@ class ActorCriticAgent(object):
             # for i in range(len(action_original)):
             #     noise[i] = 2*np.random.random() - 1
 
-            noise *= exploration_probability
+            # noise *= exploration_probability
 
-            action = action_original + noise
+            # action = action_original + noise
 
             # randomly flip signs
             #if np.random.random() < exploration_probability:
@@ -399,10 +399,33 @@ class ActorCriticAgent(object):
             #if np.random.random() < exploration_probability:
             #    action[2] *= -1
 
-            # bound actions
-            action[0] = np.clip(action[0], 0, 1)
-            action[1] = np.clip(action[1], -1, 1)
-            action[2] = np.clip(action[2], -1, 1)
+            action = np.empty_like(action_original)
+
+            # sample forward from gaussian with mean = action from actor and std depending on exploration
+            while True:
+                action[0] = np.random.normal(action_original[0], action_original[0]*exploration_probability)
+                if 0 <= action[0] <= 1:
+                    break
+
+            # sample sideways from two gaussians with means = action, -action and std depending on exploration
+            while True:
+                if np.random.uniform() >= exploration_probability:
+                    action[1] = np.random.normal(action_original[1], action_original[1]*exploration_probability)
+                else:
+                    action[1] = np.random.normal(-action_original[1], action_original[1]*exploration_probability)
+                if -1 <= action[1] <= 1:
+                    break
+
+            # sample rotation from two gaussians with means = action, -action and std depending on exploration
+            while True:
+                if np.random.uniform() >= exploration_probability:
+                    action[2] = np.random.normal(action_original[2],
+                                                 action_original[2] * exploration_probability)
+                else:
+                    action[2] = np.random.normal(-action_original[2],
+                                                 action_original[2] * exploration_probability)
+                if -1 <= action[2] <= 1:
+                    break
 
             self.update_actions(action_original, noise, action)
 
