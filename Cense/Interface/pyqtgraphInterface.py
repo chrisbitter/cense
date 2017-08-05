@@ -74,9 +74,9 @@ class Interface():
 
         # Q-Value Plot
 
-        self.action_plot = pg.BarGraphItem(x=range(9), height=np.zeros(9), width=1, brush='b')
+        self.action_plot = pg.BarGraphItem(x=range(6), height=np.zeros(6), width=1, brush='b')
 
-        action_names = ['fw_p', 'fw_n', 'fw', 'l_p', 'l_n', 'l', 'rl_p', 'rl_n', 'rl']
+        action_names = ['fw_p', 'fw', 'l_p', 'l', 'rl_p', 'rl']
         xdict = dict(enumerate(action_names))
 
         stringaxis = pg.AxisItem(orientation='bottom')
@@ -202,16 +202,15 @@ class Interface():
         #self.q_value_plot.setOpts(height=q_values, brushes=colors)
 
     @check_interface_status
-    def update_actions(self, actions, noise, actions_executed):
+    def update_actions(self, actions, actions_executed):
         # draw q_values except value corresponding to action
 
-        colors = ['b','r','g'] * 3
+        colors = ['b','g'] * 3
 
         heights = []
 
         for i in range(3):
             heights.append(actions[i])
-            heights.append(noise[i])
             heights.append(actions_executed[i])
 
         self.action_plot.setOpts(height=heights, brushes=colors)

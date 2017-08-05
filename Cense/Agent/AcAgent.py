@@ -10,10 +10,10 @@ import keras.models
 import numpy as np
 
 import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
-# from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
 from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
 from Cense.Environment.continuousEnvironment import ContinuousEnvironment as World
 from Cense.Environment.continuousEnvironment import *
+from Resources.Noise.emerging_gaussian import emerging_gaussian as Noise
 
 # from Cense.Environment.dummyWorld import DummyWorld as World
 # from Cense.Environment.dummyWorld import *
@@ -171,7 +171,7 @@ class ActorCriticAgent(object):
                         if self.world.is_at_goal():
                             # once the wire is learned successfully, stop training
                             self.model.save(
-                                os.path.join(self.experiment_directory, 'actor_' + str(run_number + 1)
+                                os.path.join(self.experiment_directory, 'actor_' + str(run_number + 1) + "_"
                                              + str(run_steps) + '_goal.h5'))
                             self.set_status("Successfully completed wire!")
 
@@ -190,8 +190,10 @@ class ActorCriticAgent(object):
                         statistics["testing_steps"] = 0
                         statistics["testing_rewards"] = ""
 
+                except IllegalPoseException:
+                    pass
 
-                except (UntreatableStateError, IllegalPoseException) as e:
+                except UntreatableStateError as e:
                     self.set_status("Something went wrong! Stopping Training")
                     print(type(e))
                     self.stop_training()
@@ -230,7 +232,10 @@ class ActorCriticAgent(object):
 
                     self.set_status("Advanced start by ", run_steps, " steps")
 
-                except (UntreatableStateError, IllegalPoseException) as e:
+                except IllegalPoseException:
+                    pass
+
+                except UntreatableStateError as e:
                     self.set_status("Something went wrong! Stopping Training")
                     print(type(e))
                     self.stop_training()
@@ -238,6 +243,7 @@ class ActorCriticAgent(object):
             # train neural network after collecting some experience
             if run_number % self.runs_before_update == 0 and not self.stop:
                 if self.trainer.is_done_training() and len(states):
+                        #and (self.trainer.training_number > 0 or len(states) >= self.trainer.batch_size_start):
                     self.set_status("Update Network: Success")
                     statistics["successful_network_update"] = 1
                     logging.debug("Replace NN and start new training")
@@ -251,6 +257,7 @@ class ActorCriticAgent(object):
 
                     with self.graph.as_default():
                         self.model.load_weights(self.model_file)
+
                     Thread(target=self.trainer.train,
                            args=(gpu_states, gpu_actions, gpu_rewards, gpu_new_states, gpu_terminals)).start()
 
@@ -300,7 +307,10 @@ class ActorCriticAgent(object):
 
                         run_number += 1
 
-                except (UntreatableStateError, IllegalPoseException) as e:
+                except IllegalPoseException:
+                    pass
+
+                except UntreatableStateError as e:
                     self.set_status("Something went wrong! Stopping Training")
                     print(type(e))
                     self.stop_training()
@@ -367,67 +377,25 @@ class ActorCriticAgent(object):
             if np.any(np.isnan(action_original)):
                 raise ValueError("Net is broken!")
 
-
-            # print(action_original.shape)
-
-            # noise = np.empty_like(action_original)
-
-            # for i in range(len(action_original)):
-            #     # Ornstein-Uhlenbeck noise generation
-            #     noise[i] = 0.15 * (0 - action_original[i]) + 0.2 * np.random.randn(1)
-
-            # noise[0] = 0.15 * (.5 - action_original[0]) + 0.7 * np.random.randn(1) # forward
-            # noise[1] = 0.15 * (0 - action_original[1]) + 0.7 * np.random.randn(1) # sideways
-            # noise[2] = 0.15 * (0 - action_original[2]) + 0.7 * np.random.randn(1) # rotation
-
-            #noise[0] = np.random.random() - .5
-            #noise[1] = 3 * np.random.random() - 1.5
-            #noise[2] = 3 * np.random.random() - 1.5
-
-
-            # for i in range(len(action_original)):
-            #     noise[i] = 2*np.random.random() - 1
-
-            # noise *= exploration_probability
-
-            # action = action_original + noise
-
-            # randomly flip signs
-            #if np.random.random() < exploration_probability:
-            #    action[1] *= -1
-
-            #if np.random.random() < exploration_probability:
-            #    action[2] *= -1
-
             action = np.empty_like(action_original)
 
-            # sample forward from gaussian with mean = action from actor and std depending on exploration
-            while True:
-                action[0] = np.random.normal(action_original[0], action_original[0]*exploration_probability)
-                if 0 <= action[0] <= 1:
-                    break
+            #print(action_original)
 
-            # sample sideways from two gaussians with means = action, -action and std depending on exploration
-            while True:
-                if np.random.uniform() >= exploration_probability:
-                    action[1] = np.random.normal(action_original[1], action_original[1]*exploration_probability)
-                else:
-                    action[1] = np.random.normal(-action_original[1], action_original[1]*exploration_probability)
-                if -1 <= action[1] <= 1:
-                    break
+            action[0] = Noise(action_original[0], exploration_probability, 0, 1)
+            action[1] = Noise(action_original[1], exploration_probability, -1, 1)
+            action[2] = Noise(action_original[2], exploration_probability, -1, 1)
 
-            # sample rotation from two gaussians with means = action, -action and std depending on exploration
-            while True:
-                if np.random.uniform() >= exploration_probability:
-                    action[2] = np.random.normal(action_original[2],
-                                                 action_original[2] * exploration_probability)
-                else:
-                    action[2] = np.random.normal(-action_original[2],
-                                                 action_original[2] * exploration_probability)
-                if -1 <= action[2] <= 1:
-                    break
+            # action[0] = 1 * (.5 - action_original[0]) + .1 * np.random.randn(1)
+            # action[1] = .6 * (0 - action_original[1]) + .3 * np.random.randn(1)
+            # action[2] = .6 * (0 - action_original[2]) + .3 * np.random.randn(1)
+            #
+            # action[0] = np.clip(action[0], 0, 1)
+            # action[1] = np.clip(action[1], -1, 1)
+            # action[2] = np.clip(action[2], -1, 1)
 
-            self.update_actions(action_original, noise, action)
+            #print(action_original, action)
+
+            self.update_actions(action_original, action)
 
             try:
                 new_state, reward, terminal = self.world.execute(action)
@@ -460,6 +428,7 @@ class ActorCriticAgent(object):
 
                 break
             except IllegalPoseException:
+                self.world.reset(hard_reset=True)
                 raise
 
             states.append(state)
@@ -485,7 +454,7 @@ class ActorCriticAgent(object):
 
                 self.run_until_terminal(0)
 
-            except (UntreatableStateError, IllegalPoseException) as e:
+            except UntreatableStateError as e:
                 self.set_status("Something went wrong! Shutting down")
                 print(type(e))
                 self.stop_training()

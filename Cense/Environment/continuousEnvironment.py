@@ -28,7 +28,11 @@ class ContinuousEnvironment(object):
     GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
     # GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, np.pi/2, 0])
 
-    STATE_DIMENSIONS = (60, 60)
+    # START_DIFF_BETA = 0
+    # CURRENT_START_DIFF_BETA = START_DIFF_BETA
+    # DIFF_BETA = 0
+
+    STATE_DIMENSIONS = (40, 40)
     ACTIONS = 3
 
     __checkpoints = []
@@ -91,11 +95,13 @@ class ContinuousEnvironment(object):
 
         try:
             touched_wire, mean_percentage_traveled = self.controller.move_to_pose(next_pose)
+            # self.DIFF_BETA += action[2] * self.ROTATION_MAX_ANGLE
 
             if touched_wire:
-                reward = self.PUNISHMENT_WIRE # * (1 - .3 * mean_percentage_traveled)
+                reward = self.PUNISHMENT_WIRE * (1 - .2 * mean_percentage_traveled)
                 terminal = True
-                self.reset_stepwatchdog()
+                self.CURRENT_STEP_WATCHDOG -= 1
+                # self.reset_stepwatchdog()
             elif self.is_at_goal():
                 reward = self.REWARD_GOAL
                 terminal = True
@@ -109,7 +115,10 @@ class ContinuousEnvironment(object):
                 self.advance_checkpoints()
                 self.reset_stepwatchdog()
             else:
-                reward = (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS
+                reward = (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS #\
+                        # .4 * (np.sum(action**2) / 3)
+
+            # print('r', reward)
 
             if self.CURRENT_STEP_WATCHDOG >= self.STEP_WATCHDOG:
                 self.reset_stepwatchdog()
@@ -180,6 +189,22 @@ class ContinuousEnvironment(object):
         except IllegalPoseException:
             raise
 
+        # print(self.DIFF_BETA)
+        #
+        # while self.DIFF_BETA > .6*np.pi:
+        #     print("sub")
+        #     pose[4] -= np.pi / 2
+        #     self.DIFF_BETA -= np.pi / 2
+        #     self.controller.move_to_pose(pose, force=True)
+        #
+        # while self.DIFF_BETA < -.6*np.pi:
+        #     print("add")
+        #     pose[4] += np.pi / 2
+        #     self.DIFF_BETA += np.pi / 2
+        #     self.controller.move_to_pose(pose, force=True)
+        #
+        # self.DIFF_BETA = self.CURRENT_START_DIFF_BETA
+
         pose = self.CURRENT_START_POSE
         pose[1] = self.Y_DISENGAGED
         try:
@@ -223,6 +248,7 @@ class ContinuousEnvironment(object):
         if not touching_wire:
             # self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
             self.CURRENT_START_POSE = current_pose
+            # self.CURRENT_START_DIFF_BETA = self.DIFF_BETA
         else:
             print("Not updating start pose because loop is touching the wire")
 
@@ -230,6 +256,7 @@ class ContinuousEnvironment(object):
         logging.debug("Real Environment - reset_current_start_pose")
         # self.PREVIOUS_START_POSE = self.CURRENT_START_POSE
         self.CURRENT_START_POSE = self.START_POSE
+        # self.CURRENT_START_DIFF_BETA = self.START_DIFF_BETA
 
 
 if __name__ == "__main__":
@@ -255,4 +282,7 @@ if __name__ == "__main__":
 
     world = ContinuousEnvironment(config, print)
 
-    # world.execute(3)
+    for i in range(3):
+        world.execute([0, 0, -1])
+
+    world.reset()

@@ -141,6 +141,15 @@ class RtdeController(object):
 
             return np.array(state.__dict__[b'actual_TCP_pose']), touching_wire
 
+    def move_angle_to_zero(self):
+        with self.lock:
+            state = None
+
+            while state is None:
+                state = self.connection.receive()
+
+            return np.array(state.__dict__[b'actual_TCP_pose']), touching_wire
+
     # moves tcp to specified pose
     # if wire is touched, move back to old position
     def move_to_pose(self, target_pose, force=False):
@@ -239,51 +248,35 @@ class RtdeController(object):
 
 
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.ERROR)
+
+    import socket
 
     controller = RtdeController(print)
 
-    START_POSE = np.array([.3, -.35, .458, 0, np.pi / 2, 0])
-    GOAL_POSE = np.array([controller.CONSTRAINT_MIN[0] + .03, -.35, .458, 0, np.pi / 2, 0])
-    # PREVIOUS_START_POSE = START_POSE
+    # host = "137.226.189.172"
+    # port = 29999
+    #
+    # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #
+    # s.connect((host, port))
+
+    #state = controller.connection.receive()
+
+
+    # print(pose)
+
+    #pose = np.array([.3, -.3, .458, 0, np.pi / 2, 0])
+
+    dif_angle = 2*np.pi / 4.5
 
     while True:
-        controller.move_to_pose(START_POSE)
-        controller.move_to_pose(GOAL_POSE)
+        pose, _ = controller.current_pose()
 
+        print(pose[4] * 180 / np.pi)
+        pose[4] = float(input("Angle:")) * np.pi / 180
 
+        controller.move_to_pose(pose)
 
-    # import matplotlib.pyplot as plt
-    # from matplotlib.figure import Figure
-    #
-    # con = RtdeController(print)
-    #
-    # rotation = 30 * np.pi / 180
-    # # rotation *= -1
-    #
-    # x = []
-    # y = []
-    #
-    #
-    # for i in range(1000):
-    #     now = time.time()
-    #     pose, _ = con.current_pose()
-    #     pose[4] += rotation
-    #     con.move_to_pose(pose)
-    #
-    #     execution_time = time.time()-now
-    #
-    #     rotation *= -1
-    #
-    #     x.append(i)
-    #     y.append(execution_time)
-    #
-    #     plt.plot(x, y)
-    #     plt.draw()
-    #     plt.pause(0.001)
-    #
-    #     timeout = time.time() + 5
-    #     while time.time() < timeout:
-    #         pass
-
+        #pose[4] = pose[4] % (2*np.pi)
 
