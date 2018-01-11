@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from copy import deepcopy
 
-from Cense.Environment.Camera.camera_videocapture import Camera as Camera
+from Cense.Environment.Camera.camera import Camera as Camera
 from Cense.Environment.Robot.rtdeController import RtdeController as Controller, IllegalPoseException, SpawnedInTerminalStateError, ExitedInTerminalStateError
 
 

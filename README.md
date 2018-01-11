@@ -18,7 +18,8 @@ This project uses Machine Learning to learn the Loop-Wire Game
 
 - in VideoCapture/__init__.py, change im = Image.fromstring to im = Image.frombytes
   - there will be an error when running pointing to the right line of code.
-
+- in keras/utils/generic_utils change line 175 to "code = marshal.dumps(func.__code__).replace(b'\\',b'/').decode('raw_unicode_escape')"
+  - needed because of lam
 ## Remote Access
 
 - copy Resources/credentials_template.json file

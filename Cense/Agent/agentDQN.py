@@ -7,46 +7,48 @@ from threading import Thread
 
 import numpy as np
 
+import tensorflow as tf
+
 import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
 from Cense.Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
 from Cense.Environment.discreteEnvironment import DiscreteEnvironment as World
 from Cense.Environment.discreteEnvironment import *
-from Cense.Interface.pyqtgraphInterface_velocity import Interface as Interface
+
+from Cense.Interface.interface import RunningMode
+
+import pyqtgraph as pg
+from PyQt5.QtCore import pyqtSignal
+
+from copy import deepcopy
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
-class DeepQNetworkAgent(object):
-    # simulated_world = None
-    real_world = None
-    model_file = "../../Resources/nn-data/model.json"
-    weights_file = "../../Resources/nn-data/weights.h5"
-    # trained_weights_file = "../../Resources/nn-data/trained_weights.h5"
-    train_parameters = "../../Resources/train_parameters_original.json"
+class RunningStatus:
+    RUN = 0
+    PAUSE = 1
+    STOP = 2
 
-    data_storage = "../../Experiment_Data/"
 
-    working_collectors = 0
+class DeepQNetworkAgent(pg.QtCore.QThread):
+    running_status = RunningStatus.STOP
 
-    start = False
-    stop = False
+    status_signal = pyqtSignal(object)
+    steps_signal = pyqtSignal(object)
+    state_signal = pyqtSignal(object)
+    exploration_signal = pyqtSignal(object)
+    test_steps_signal = pyqtSignal(object)
+    actions_signal = pyqtSignal(object)
 
-    def __init__(self):
+    def __init__(self, parameter_file, running_mode):
+        super(DeepQNetworkAgent, self).__init__()
 
-        self.interface = Interface(self.start_training, self.stop_training, self.boost_exploration)
+        self.running_mode = running_mode
 
-        while not self.start:
-            pass
-
-        self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
-        os.makedirs(self.experiment_directory)
-
-        with open(self.train_parameters) as json_data:
+        # read configuration parameters
+        with open(parameter_file) as json_data:
             config = json.load(json_data)
-
-        with open(os.path.join(self.experiment_directory, 'train_parameters.json'), 'w') as f:
-            json.dump(config, f, sort_keys=True, indent=4)
 
         collector_config = config["collector"]
 
@@ -60,40 +62,58 @@ class DeepQNetworkAgent(object):
         self.runs_before_testing_from_start = collector_config["runs_before_testing_from_start"]
         self.min_steps_before_model_save = collector_config["min_steps_before_model_save"]
         self.continue_after_success = collector_config["continue_after_success"]
+        self.data_storage = collector_config["data_storage"]
         self.exploration_probability = self.exploration_probability_start
 
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_start) ** (
             1 / self.exploration_probability_runs_until_end)
 
-        self.world = World(config["environment"], self.interface.set_status)
+        self.world = World(config["environment"])
 
+        self.model_file = config["trainer"]["gpu_settings"]["local_data_root"] + \
+                          config["trainer"]["gpu_settings"]["local_model"]
+
+        # create directory to store everything (statistics, NN-data, etc.)
+        self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
+        os.makedirs(self.experiment_directory)
+
+        # persist parameters used for training
+        with open(os.path.join(self.experiment_directory, 'train_parameters.json'), 'w') as f:
+            json.dump(config, f, sort_keys=True, indent=4)
+
+        # create neural network
         self.model = Factory.model_dueling(self.world.STATE_DIMENSIONS, self.world.ACTIONS)
 
+        with open(os.path.join(self.experiment_directory, 'model_architecture.json'), 'w') as f:
+            json.dump(self.model.to_json(), f, sort_keys=True, indent=4)
+
         # if there's already a model, use it. Else create new model
-        if collector_config["resume_training"] and os.path.isfile(self.weights_file):
-            # with open(self.model_file) as file:
-            #    model_config = file.readline()
-            #    self.model = model_from_json(model_config)
-            self.model.load_weights(self.weights_file)
-
+        if (collector_config["resume_training"] or self.running_mode == RunningMode.PLAY) and os.path.isfile(
+                self.model_file):
+            self.model.load_weights(self.model_file)
         else:
-            # todo: check if keras allows saving of lambda layers
-            # with open(self.model_file, 'w') as file:
-            #    file.write(self.model.to_json())
-            self.model.save_weights(self.weights_file)
+            self.model.save_weights(self.model_file)
 
-        self.trainer = Trainer(config["trainer"], self.interface.set_status)
+        self.graph = tf.get_default_graph()
 
-        self.trainer.reset()
+        self.trainer = Trainer(config["trainer"])
 
-        self.trainer.send_model_to_gpu()
+        if not collector_config["resume_training"]:
+            self.trainer.reset()
+            self.trainer.send_model_to_gpu()
+
+    def run(self):
+        if self.running_mode == RunningMode.TRAIN:
+            self.train()
+        elif self.running_mode == RunningMode.PLAY:
+            self.play()
 
     def train(self):
 
         states = []
         actions = []
         rewards = []
-        suc_states = []
+        new_states = []
         terminals = []
 
         # statistics
@@ -111,10 +131,7 @@ class DeepQNetworkAgent(object):
             f.write(",".join(statistics_keys))
             f.write("\n")
 
-        while True:
-
-            if self.stop:
-                break
+        while self.running_status == RunningStatus.RUN:
 
             # reset statistics
             statistics = {}
@@ -124,30 +141,28 @@ class DeepQNetworkAgent(object):
 
             statistics["run_number"] = run_number + 1
 
-            self.interface.set_status("Run ", str(run_number + 1))
+            self.status_signal.emit("Run " + str(run_number + 1))
 
             # reset to start pose and see how far we get
             # if we don't get better at this, we might consider measures like resetting to the last network
             # that worked best or boosting exploration
-            if run_number % self.runs_before_testing_from_start == 0 and not self.stop:
+            if run_number % self.runs_before_testing_from_start == 0 and self.running_status == RunningStatus.RUN:
 
-                self.interface.set_status("Test from Start")
-
-                run_steps = 0
+                self.status_signal.emit("Test from Start")
 
                 try:
                     # reset to start
                     self.world.reset(hard_reset=True)
 
-                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                    _states, _actions, _rewards, _new_states, _terminals, run_steps, run_reward = \
                         self.run_until_terminal(0)
 
                     if run_steps:
-                        [states.append(s) for s in new_states]
-                        [actions.append(a) for a in new_actions]
-                        [rewards.append(r) for r in new_rewards]
-                        [suc_states.append(s) for s in new_suc_states]
-                        [terminals.append(t) for t in new_terminals]
+                        [states.append(s) for s in _states]
+                        [actions.append(a) for a in _actions]
+                        [rewards.append(r) for r in _rewards]
+                        [new_states.append(s) for s in _new_states]
+                        [terminals.append(t) for t in _terminals]
 
                         statistics["testing_steps"] = run_steps
                         statistics["testing_rewards"] = run_reward
@@ -162,7 +177,7 @@ class DeepQNetworkAgent(object):
                             self.model.save_weights(
                                 os.path.join(self.experiment_directory, 'weights_' + str(run_number + 1)
                                              + str(run_steps) + '_goal.h5'))
-                            self.interface.set_status("Successfully completed wire!")
+                            self.status_signal.emit("Successfully completed wire!")
 
                             if not self.continue_after_success:
                                 self.stop_training()
@@ -173,35 +188,37 @@ class DeepQNetworkAgent(object):
                         else:
                             self.world.update_current_start_pose()
 
-                        self.interface.update_test_steps(run_number + 1, run_steps)
+                        self.test_steps_signal.emit([run_number + 1, run_steps])
 
                     else:
                         statistics["testing_steps"] = 0
                         statistics["testing_rewards"] = ""
 
+                except IllegalPoseException:
+                    pass
 
-                except (UntreatableStateError, IllegalPoseException) as e:
-                    self.interface.set_status("Something went wrong! Stopping Training")
+                except UntreatableStateError as e:
+                    self.status_signal("Something went wrong! Stopping Training")
                     print(type(e))
                     self.stop_training()
 
             # try how far we get with the current model.
             # take last stable state as new starting point
-            if run_number % self.runs_before_advancing_start == 0 and not self.stop:
-                self.interface.set_status("Advancing Start Position")
+            if run_number % self.runs_before_advancing_start == 0 and self.running_status == RunningStatus.RUN:
+                self.status_signal.emit("Advancing Start Position")
 
                 run_steps = 0
 
                 try:
-                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                    _states, _actions, _rewards, _new_states, _terminals, run_steps, run_reward = \
                         self.run_until_terminal(0)
 
                     if run_steps:
-                        [states.append(s) for s in new_states]
-                        [actions.append(a) for a in new_actions]
-                        [rewards.append(r) for r in new_rewards]
-                        [suc_states.append(s) for s in new_suc_states]
-                        [terminals.append(t) for t in new_terminals]
+                        [states.append(s) for s in _states]
+                        [actions.append(a) for a in _actions]
+                        [rewards.append(r) for r in _rewards]
+                        [new_states.append(s) for s in _new_states]
+                        [terminals.append(t) for t in _terminals]
 
                         # collect statistics
                         statistics["advancing_steps"] = run_steps
@@ -217,23 +234,39 @@ class DeepQNetworkAgent(object):
                     else:
                         self.world.update_current_start_pose()
 
-                    self.interface.set_status("Advanced start by ", run_steps, " steps")
+                    self.status_signal.emit("Advanced start by " + str(run_steps) + " steps")
 
-                except (UntreatableStateError, IllegalPoseException) as e:
-                    self.interface.set_status("Something went wrong! Stopping Training")
+                except IllegalPoseException:
+                    pass
+
+                except UntreatableStateError as e:
+                    self.status_signal.emit("Something went wrong! Stopping Training")
                     print(type(e))
                     self.stop_training()
 
             # train neural network after collecting some experience
-            if run_number % self.runs_before_update == 0 and not self.stop:
+            if run_number % self.runs_before_update == 0 and self.running_status == RunningStatus.RUN:
                 if self.trainer.is_done_training() and len(states):
-                    self.interface.set_status("Update Network: Success")
+                    print("Update Network: Success")
                     statistics["successful_network_update"] = 1
                     logging.debug("Replace NN and start new training")
 
-                    self.model.load_weights(self.weights_file)
+                    # print(np.amin(rewards), np.amax(rewards))
+
+                    # deep copy experience
+                    gpu_states = deepcopy(states)  # states.copy() #(np.array(states)[:, 0]).tolist()
+                    gpu_actions = deepcopy(actions)  # .copy()
+                    gpu_rewards = deepcopy(rewards)  # .copy()
+                    gpu_new_states = deepcopy(new_states)  # .copy() #(np.array(new_states)[:, 0]).tolist()
+                    gpu_terminals = deepcopy(terminals)  # .copy()
+
+                    # print(np.shape(gpu_states), np.shape(gpu_new_states))
+
+                    with self.graph.as_default():
+                        self.model.load_weights(self.model_file)
+
                     Thread(target=self.trainer.train,
-                           args=(states, actions, rewards, suc_states, terminals)).start()
+                           args=(gpu_states, gpu_actions, gpu_rewards, gpu_new_states, gpu_terminals)).start()
 
                     training_number += 1
 
@@ -241,33 +274,33 @@ class DeepQNetworkAgent(object):
                     states = []
                     actions = []
                     rewards = []
-                    suc_states = []
+                    new_states = []
                     terminals = []
                 else:
-                    #self.interface.set_status("Update Network: Failed")
+                    # self.interface.set_status("Update Network: Failed")
                     statistics["successful_network_update"] = 0
 
             run_steps = 0
 
-            while not run_steps and not self.stop:
+            while not run_steps and self.running_status == RunningStatus.RUN:
                 # try to record a run
                 # this is needed, because if for some reason the run_number isn't advanced, the testing, training or
                 #  advancing section might be run over and over
 
                 try:
-                    new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
+                    _states, _actions, _rewards, _new_states, _terminals, run_steps, run_reward = \
                         self.run_until_terminal(self.exploration_probability)
 
                     if run_steps:
-                        [states.append(s) for s in new_states]
-                        [actions.append(a) for a in new_actions]
-                        [rewards.append(r) for r in new_rewards]
-                        [suc_states.append(s) for s in new_suc_states]
-                        [terminals.append(t) for t in new_terminals]
+                        [states.append(s) for s in _states]
+                        [actions.append(a) for a in _actions]
+                        [rewards.append(r) for r in _rewards]
+                        [new_states.append(s) for s in _new_states]
+                        [terminals.append(t) for t in _terminals]
 
                         # plot
-                        self.interface.update_steps(run_number + 1, run_steps)
-                        self.interface.update_exploration(run_number + 1, self.exploration_probability)
+                        self.steps_signal.emit([run_number + 1, run_steps])
+                        self.exploration_signal.emit([run_number + 1, self.exploration_probability])
 
                         # collect statistics
                         statistics["steps"] = run_steps
@@ -281,8 +314,11 @@ class DeepQNetworkAgent(object):
 
                         run_number += 1
 
-                except (UntreatableStateError, IllegalPoseException) as e:
-                    self.interface.set_status("Something went wrong! Stopping Training")
+                except IllegalPoseException:
+                    pass
+
+                except UntreatableStateError as e:
+                    self.status_signal.emit("Something went wrong! Stopping Training")
                     print(type(e))
                     self.stop_training()
 
@@ -298,14 +334,11 @@ class DeepQNetworkAgent(object):
                 f.write(statistics_string)
                 f.write("\n")
 
-        while self.interface.running_status is not 'exit':
-            pass
-
     def start_training(self):
-        self.start = True
+        self.running_status = RunningStatus.RUN
 
     def stop_training(self):
-        self.stop = True
+        self.running_status = RunningStatus.STOP
 
     def boost_exploration(self):
         self.exploration_probability = self.exploration_probability_start
@@ -313,12 +346,12 @@ class DeepQNetworkAgent(object):
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_start) ** (
             1 / self.exploration_probability_boost_runs_until_end)
 
-    def run_until_terminal(self, exploration_probability):
+    def run_until_terminal(self, exploration_probability, action_log=None):
 
         states = []
         actions = []
         rewards = []
-        suc_states = []
+        new_states = []
         terminals = []
 
         # statistics
@@ -332,9 +365,10 @@ class DeepQNetworkAgent(object):
 
             state = self.world.observe_state()
 
-            self.interface.update_state(state)
+            self.state_signal.emit(state)
 
-            q_values = self.model.predict(np.expand_dims(state, axis=0))
+            with self.graph.as_default():
+                q_values = self.model.predict(np.expand_dims(state, axis=0))
 
             if np.any(np.isnan(q_values)):
                 raise ValueError("Net is broken!")
@@ -345,10 +379,15 @@ class DeepQNetworkAgent(object):
             else:
                 action = np.argmax(q_values)
 
-            self.interface.update_q_value(q_values[0], action)
+            self.actions_signal.emit([q_values[0], action])
 
             try:
-                suc_state, reward, terminal = self.world.execute(action)
+                if action_log is not None:
+                    with open(action_log, 'a') as f:
+                        f.write(",".join(map(str, q_values)))
+                        f.write("\n")
+
+                new_state, reward, terminal = self.world.execute(action)
 
             except SpawnedInTerminalStateError:
                 # last action apperantly led to undetected nonterminal state
@@ -361,16 +400,16 @@ class DeepQNetworkAgent(object):
                 break
             except ExitedInTerminalStateError:
                 # something went wrong when trying to reset to nonterminal state.
-                # this also means, that suc_state is terminal
+                # this also means, that new_state is terminal
 
-                # just copy state (suc_state not needed for DQN when terminal anyways)
-                suc_state = state
+                # just copy state (new_state not needed for DQN when terminal anyways)
+                new_state = state
                 reward = self.world.PUNISHMENT_WIRE
                 terminal = True
             except UntreatableStateError:
                 raise
             except InsufficientProgressError:
-                self.interface.set_status("Insufficient Progress. Aborting Run.")
+                self.status_signal.emit("Insufficient Progress. Aborting Run.")
                 if len(states):
                     run_reward -= rewards[-1]
                     rewards[-1] = self.world.PUNISHMENT_INSUFFICIENT_PROGRESS
@@ -378,34 +417,42 @@ class DeepQNetworkAgent(object):
 
                 break
             except IllegalPoseException:
+                self.world.reset(hard_reset=True)
                 raise
 
             states.append(state)
             actions.append(action)
             rewards.append(reward)
-            suc_states.append(suc_state)
+            new_states.append(new_state)
             terminals.append(terminal)
 
             # collect stats
             run_steps += 1
             run_reward += reward
 
-        return states, actions, rewards, suc_states, terminals, run_steps, run_reward
+        return states, actions, rewards, new_states, terminals, run_steps, run_reward
 
     def play(self):
 
-        self.model.load_weights(self.weights_file)
+        # self.model.load_weights(self.model_file)
 
-        while not self.stop:
+        action_log = os.path.join(self.experiment_directory, 'action_log.csv')
 
+        action_keys = ["Left Rotation", "Left", "Forward", "Right", "Right Rotation"]
+
+        with open(action_log, 'a') as f:
+            f.write(",".join(action_keys))
+            f.write("\n")
+
+        while True:
             try:
                 self.world.reset(hard_reset=True)
+                _, _, _, _, _, run_steps, run_reward = self.run_until_terminal(0, action_log)
 
-                new_states, new_actions, new_rewards, new_suc_states, new_terminals, run_steps, run_reward = \
-                    self.run_until_terminal(0)
+                print(run_steps, run_reward)
 
-            except (UntreatableStateError, IllegalPoseException) as e:
-                self.interface.set_status("Something went wrong! Shutting down")
+            except UntreatableStateError as e:
+                self.status_signal.emit("Something went wrong! Shutting down")
                 print(type(e))
                 self.stop_training()
 
@@ -413,9 +460,4 @@ class DeepQNetworkAgent(object):
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.ERROR)
 
-    agent = DeepQNetworkAgent()
-
-    if agent.interface.mode == 'train':
-        agent.train()
-    elif agent.interface.mode == 'play':
-        agent.play()
+    pass

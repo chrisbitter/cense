@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-from Cense.Environment.Camera.camera_videocapture import Camera as Camera
+from Cense.Environment.Camera.camera import Camera as Camera
 from Cense.Environment.Robot.rtdeController import RtdeController as Controller, IllegalPoseException, \
     SpawnedInTerminalStateError, ExitedInTerminalStateError
 
@@ -18,10 +18,10 @@ class UntreatableStateError(Exception):
 
 
 class ContinuousEnvironment(object):
-    Y_DISENGAGED = -.3
-    Y_ENGAGED = -.35
+    Y_DISENGAGED = -.41
+    Y_ENGAGED = -.48
 
-    START_POSE = np.array([.3, Y_ENGAGED, .458, 0, np.pi / 2, 0])
+    START_POSE = np.array([.27, Y_ENGAGED, .50, 0, -np.pi/2, 0])
     # PREVIOUS_START_POSE = START_POSE
 
     CURRENT_START_POSE = START_POSE
@@ -32,7 +32,7 @@ class ContinuousEnvironment(object):
     # CURRENT_START_DIFF_BETA = START_DIFF_BETA
     # DIFF_BETA = 0
 
-    STATE_DIMENSIONS = (40, 40)
+    STATE_DIMENSIONS = (40, 40, 3)
     ACTIONS = 3
 
     __checkpoints = []
@@ -43,7 +43,7 @@ class ContinuousEnvironment(object):
 
     last_action = None
 
-    def __init__(self, environment_config, set_status_func):
+    def __init__(self, environment_config):
 
         self.CHECKPOINT_DISTANCE = environment_config["checkpoint_distance"]
 
@@ -60,14 +60,12 @@ class ContinuousEnvironment(object):
         self.TRANSLATION_SIDEWAYS_MAX_DISTANCE = environment_config["translation_sideways_max_distance"]
         self.ROTATION_MAX_ANGLE = environment_config["rotation_max_angle"] * np.pi / 180
 
-        self.set_status_func = set_status_func
-
         logging.debug("Real Environment - init")
 
-        self.set_status_func("Setup Environment")
+        print("Setup Environment")
 
-        self.controller = Controller(set_status_func)
-        self.camera = Camera(self.STATE_DIMENSIONS, set_status_func)
+        self.controller = Controller()
+        self.camera = Camera(self.STATE_DIMENSIONS)
 
         self.reset()
 
@@ -79,26 +77,29 @@ class ContinuousEnvironment(object):
     def execute(self, action):
         logging.debug("Real Environment - execute")
 
+        # temp = action[0]
+        # action[0] = action[1]
+        # action[1] = temp
+
         self.CURRENT_STEP_WATCHDOG += 1
 
         next_pose, _ = self.controller.current_pose()
 
         # all movements relative to TCP orientation
 
-        next_pose[0] += - action[0] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(next_pose[4]) \
-                        - action[1] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(next_pose[4])
-        next_pose[2] += - action[0] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.cos(next_pose[4]) \
-                        + action[1] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.sin(next_pose[4])
+        next_pose[0] += action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.sin(next_pose[4]) \
+                        + action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.cos(next_pose[4])
+        next_pose[2] += action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(next_pose[4]) \
+                        - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(next_pose[4])
         next_pose[4] += action[2] * self.ROTATION_MAX_ANGLE
 
         terminal = False
 
         try:
             touched_wire, mean_percentage_traveled = self.controller.move_to_pose(next_pose)
-            # self.DIFF_BETA += action[2] * self.ROTATION_MAX_ANGLE
 
             if touched_wire:
-                reward = self.PUNISHMENT_WIRE * (1 - .2 * mean_percentage_traveled)
+                reward = self.PUNISHMENT_WIRE # * (1 - .2 * mean_percentage_traveled)
                 terminal = True
                 self.CURRENT_STEP_WATCHDOG -= 1
                 # self.reset_stepwatchdog()
@@ -115,8 +116,8 @@ class ContinuousEnvironment(object):
                 self.advance_checkpoints()
                 self.reset_stepwatchdog()
             else:
-                reward = (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS #\
-                        # .4 * (np.sum(action**2) / 3)
+                reward = .6 * (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS \
+                         + .4 * action[0]  # reward
 
             # print('r', reward)
 
@@ -280,9 +281,11 @@ if __name__ == "__main__":
         "rotation_max_angle": 90
     }
 
-    world = ContinuousEnvironment(config, print)
+    world = ContinuousEnvironment(config)
 
-    for i in range(3):
-        world.execute([0, 0, -1])
+    #world.execute([0,-.3,0])
 
-    world.reset()
+    # for i in range(3):
+    #     world.execute([0, 0, -1])
+    #
+    # world.reset()
