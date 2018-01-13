@@ -18,22 +18,26 @@ class UntreatableStateError(Exception):
 
 
 class ContinuousEnvironment(object):
-    Y_DISENGAGED = -.41
-    Y_ENGAGED = -.48
 
-    START_POSE = np.array([.27, Y_ENGAGED, .50, 0, -np.pi/2, 0])
-    # PREVIOUS_START_POSE = START_POSE
+    #####################################################################
+    ##### Parameters
 
-    CURRENT_START_POSE = START_POSE
-    GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
-    # GOAL_POSE = np.array([-.215, Y_ENGAGED, .503, 0, np.pi/2, 0])
+    ###Physical
+    Y_DISENGAGED = -.32
+    Y_ENGAGED = -.38
 
-    # START_DIFF_BETA = 0
-    # CURRENT_START_DIFF_BETA = START_DIFF_BETA
-    # DIFF_BETA = 0
+    START_POSE = np.array([.27, Y_ENGAGED, .38, 0, -np.pi/2, 0])
 
+    GOAL_X = -.213
+    #GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
+
+    ###Reinforcement Learning
     STATE_DIMENSIONS = (40, 40, 3)
     ACTIONS = 3
+
+    #####################################################################
+
+    CURRENT_START_POSE = START_POSE
 
     __checkpoints = []
 
@@ -99,7 +103,7 @@ class ContinuousEnvironment(object):
             touched_wire, mean_percentage_traveled = self.controller.move_to_pose(next_pose)
 
             if touched_wire:
-                reward = self.PUNISHMENT_WIRE # * (1 - .2 * mean_percentage_traveled)
+                reward = self.PUNISHMENT_WIRE * (1 - .4 * mean_percentage_traveled)
                 terminal = True
                 self.CURRENT_STEP_WATCHDOG -= 1
                 # self.reset_stepwatchdog()
@@ -116,10 +120,10 @@ class ContinuousEnvironment(object):
                 self.advance_checkpoints()
                 self.reset_stepwatchdog()
             else:
-                reward = .6 * (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS \
-                         + .4 * action[0]  # reward
+                reward = .8 * (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS \
+                         + .2 * action[0]
 
-            # print('r', reward)
+            print(action, reward, mean_percentage_traveled)
 
             if self.CURRENT_STEP_WATCHDOG >= self.STEP_WATCHDOG:
                 self.reset_stepwatchdog()
@@ -283,7 +287,11 @@ if __name__ == "__main__":
 
     world = ContinuousEnvironment(config)
 
-    #world.execute([0,-.3,0])
+    world.execute([0.2,0,0])
+    world.execute([0,.2,0])
+    world.execute([0,-.2,0])
+    world.execute([0,0,.2])
+    world.execute([0,0,-.2])
 
     # for i in range(3):
     #     world.execute([0, 0, -1])

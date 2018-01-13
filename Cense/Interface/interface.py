@@ -432,7 +432,10 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("CENSE-Demonstrator")
 
-    window_running_mode = WindowRunningMode(Mode.DUMMY)
+    # window_cockpit = CockpitWindow(Mode.AC, RunningMode.TRAIN)
+    # window_cockpit.show()
+
+    window_running_mode = WindowRunningMode(Mode.AC)
     window_running_mode.show()
 
     # window_mode = WindowMode()

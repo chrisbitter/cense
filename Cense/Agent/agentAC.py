@@ -199,7 +199,7 @@ class AgentActorCritic(pg.QtCore.QThread):
 
             # try how far we get with the current model.
             # take last stable state as new starting point
-            if run_number % self.runs_before_advancing_start == 0 and self.running_status == RunningStatus.RUN:
+            if run_number % self.runs_before_advancing_start == 0 and run_number % self.runs_before_testing_from_start != 0 and self.running_status == RunningStatus.RUN:
                 self.status_signal.emit("Advancing Start Position")
 
                 try:
@@ -369,14 +369,6 @@ class AgentActorCritic(pg.QtCore.QThread):
             action[0] = Noise(action_original[0], exploration_probability, 0, 1)
             action[1] = Noise(action_original[1], exploration_probability, -1, 1)
             action[2] = Noise(action_original[2], exploration_probability, -1, 1)
-
-            # action[0] = 1 * (.5 - action_original[0]) + .1 * np.random.randn(1)
-            # action[1] = .6 * (0 - action_original[1]) + .3 * np.random.randn(1)
-            # action[2] = .6 * (0 - action_original[2]) + .3 * np.random.randn(1)
-            #
-            # action[0] = np.clip(action[0], 0, 1)
-            # action[1] = np.clip(action[1], -1, 1)
-            # action[2] = np.clip(action[2], -1, 1)
 
             self.actions_signal.emit([action_original, action])
 

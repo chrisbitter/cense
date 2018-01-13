@@ -53,11 +53,11 @@ class RtdeController(object):
 
     keep_running = True
 
-    # CONSTRAINT_MIN = np.array([-.19, -.38, .17])
-    # CONSTRAINT_MAX = np.array([.33, -.27, .7])
+    # CONSTRAINT_MIN = np.array([-.21, -.54, -.2])
+    # CONSTRAINT_MAX = np.array([.28, -.3, .7])
 
-    CONSTRAINT_MIN = np.array([-.25 , -.54, -.2])
-    CONSTRAINT_MAX = np.array([.28, -.3, .7])
+    CONSTRAINT_MIN = np.array([-.26 , -.41, .1])
+    CONSTRAINT_MAX = np.array([.30, -.26, 0.68])
 
     SPEED_FRACTION = .6
 
@@ -257,6 +257,13 @@ if __name__ == "__main__":
 
     controller = RtdeController()
 
+    controller.abort_movement()
+
+    try:
+        pose, _ = controller.current_pose()
+        controller.move_to_pose(pose)
+    except:
+        pass
     # host = "137.226.189.172"
     # port = 29999
     #
@@ -266,16 +273,11 @@ if __name__ == "__main__":
 
     # state = controller.connection.receive()
 
-
     # print(pose)
 
     # pose = np.array([.3, -.3, .458, 0, np.pi / 2, 0])
 
-    dif_angle = 2 * np.pi / 4.5
-
     pose, _ = controller.current_pose()
-
-    pose[0] = float(input("Angle:")) * np.pi / 180
 
     controller.move_to_pose(pose)
 

@@ -7,12 +7,6 @@ import matplotlib.patches as patches
 
 controller = RtdeController()
 
-try:
-    pose, _ = controller.current_pose()
-    controller.move_to_pose(pose)
-except:
-    pass
-
 fig1 = plt.figure()
 
 ax1 = fig1.add_subplot(121, aspect='equal')
