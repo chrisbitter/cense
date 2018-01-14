@@ -5,36 +5,18 @@ import os
 
 import h5py
 import paramiko
+import time
+
+from threading import Thread
 
 
 class GpuTrainer(object):
-
-    host = None
-    port = None
-    username = None
-    password = None
-    new_data_local = None
-    new_data_remote = None
-
-    model_config_local = None
-    model_config_remote = None
-
-    model_weights_local = None
-    model_weights_remote = None
-
-    training_params_local = None
-    training_params_remote = None
-
-    script_remote = None
 
     done_training = True
 
     training_number = 0
 
-    def __init__(self, trainer_config, set_status_func):
-
-        self.set_status_func = set_status_func
-        set_status_func("Setup Trainer")
+    def __init__(self, trainer_config):
 
         self.epochs_start = trainer_config["epochs_start"]
         self.epochs_end = trainer_config["epochs_end"]
@@ -42,14 +24,12 @@ class GpuTrainer(object):
         self.batch_size_end = trainer_config["batch_size_end"]
         self.trainings_before_param_update = trainer_config["trainings_before_param_update"]
         self.trainings_until_end_config = trainer_config["trainings_until_end_config"]
-        self.trainings_without_target = trainer_config["trainings_without_target"]
         self.discount_factor = trainer_config["discount_factor"]
         self.target_update_rate = trainer_config["target_update_rate"]
 
         self.current_gpu_config = {
             "epochs": self.epochs_start,
             "batch_size": self.batch_size_start,
-            "use_target": 0,
             "discount_factor": self.discount_factor,
             "target_update_rate": self.target_update_rate
         }
@@ -63,20 +43,56 @@ class GpuTrainer(object):
         self.username = gpu_settings["user"]
         self.password = gpu_settings["password"]
 
-        self.new_data_local = gpu_settings["local_data_root"] + gpu_settings["new_data_local"]
-        self.model_config_local = gpu_settings["local_data_root"] + gpu_settings["model_config_local"]
-        self.model_weights_local = gpu_settings["local_data_root"] + gpu_settings["model_weights_local"]
-        self.training_params_local = gpu_settings["local_data_root"] + gpu_settings["training_params_local"]
+        self.id = time.strftime('%Y%m%d-%H%M%S')
 
-        self.new_data_remote = gpu_settings["remote_data_root"] + gpu_settings["new_data_remote"]
-        self.model_config_remote = gpu_settings["remote_data_root"] + gpu_settings["model_config_remote"]
-        self.model_weights_remote = gpu_settings["remote_data_root"] + gpu_settings["model_weights_remote"]
-        self.training_params_remote = gpu_settings["remote_data_root"] + gpu_settings["training_params_remote"]
+        self.local_new_data = gpu_settings["local_data_root"] + gpu_settings["local_new_data"]
+        self.local_model = gpu_settings["local_data_root"] + gpu_settings["local_model"]
+        self.local_training_params = gpu_settings["local_data_root"] + gpu_settings["local_training_params"]
 
-        self.script_remote = gpu_settings["remote_data_root"] + gpu_settings["script_remote"]
-        self.test_script_remote = gpu_settings["remote_data_root"] + gpu_settings["test_script_remote"]
+        self.remote_new_data = gpu_settings["remote_data_root"] + gpu_settings["remote_new_data"]
+        self.remote_model = gpu_settings["remote_data_root"] + gpu_settings["remote_model"]
+        self.remote_training_params = gpu_settings["remote_data_root"] + gpu_settings["remote_training_params"]
 
-    def train(self, states, actions, rewards, suc_states, terminals):
+        self.remote_script_train = gpu_settings["remote_data_root"] + gpu_settings["remote_script_train"]
+        self.remote_script_reset = gpu_settings["remote_data_root"] + gpu_settings["remote_script_reset"]
+
+        self.remote_signal_train = gpu_settings["remote_data_root"] + gpu_settings["remote_signal_train"] + self.id
+        self.remote_signal_alive = gpu_settings["remote_data_root"] + gpu_settings["remote_signal_alive"] + self.id
+
+    def get_ssh_channel(self):
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(
+            paramiko.AutoAddPolicy())
+
+        ssh.connect(self.host, self.port, self.username, self.password)
+
+        return ssh
+
+    def get_sftp_channel(self):
+        transport = paramiko.Transport((self.host, self.port))
+        transport.connect(username=self.username, password=self.password)
+        sftp = paramiko.SFTPClient.from_transport(transport)
+
+        return transport, sftp
+
+    def reset(self):
+        # reset gpu
+
+        ssh = self.get_ssh_channel()
+
+        command = "python " + self.remote_script_reset
+
+        stdin, stdout, stderr = ssh.exec_command(command)
+
+        exit_status = stdout.channel.recv_exit_status()
+
+        if exit_status != 0:
+            print("Error: ", exit_status)
+            [print(err) for err in stderr.readlines()]
+
+        ssh.close()
+
+    def train(self, states, actions, rewards, new_states, terminals):
 
         if self.host is None or self.port is None or self.username is None or self.password is None:
             print("Credentials missing!")
@@ -87,138 +103,96 @@ class GpuTrainer(object):
 
         config_changed = False
 
-        if self.training_number % self.trainings_before_param_update == 0:
-            self.current_gpu_config["epochs"] += \
-                (self.epochs_end - self.epochs_start) // self.trainings_until_end_config
-            self.current_gpu_config["batch_size"] += \
-                (self.batch_size_end - self.batch_size_start) // self.trainings_until_end_config
-            config_changed = True
+        if self.training_number <= self.trainings_until_end_config:
+            if self.training_number % self.trainings_before_param_update == 0:
+                self.current_gpu_config["epochs"] += \
+                    (self.epochs_end - self.epochs_start) // self.trainings_until_end_config
+                self.current_gpu_config["batch_size"] += \
+                    (self.batch_size_end - self.batch_size_start) // self.trainings_until_end_config
+                config_changed = True
 
-        if self.training_number == self.trainings_without_target + 1:
-            self.current_gpu_config["use_target"] = 1
-            config_changed = True
+        # if self.training_number == self.trainings_without_target + 1:
+        #     self.current_gpu_config["use_target"] = 1
+        #     config_changed = True
 
         # Send experience & configuration to GPU
+
+        if os.path.isfile(self.local_new_data):
+            os.remove(self.local_new_data)
+
         # pack data into hdf file (overwrites existing data!)
-        with h5py.File(self.new_data_local, 'w') as f:
+        with h5py.File(self.local_new_data, 'w') as f:
             f.create_dataset('states', data=states)
             f.create_dataset('actions', data=actions)
             f.create_dataset('rewards', data=rewards)
-            f.create_dataset('suc_states', data=suc_states)
+            f.create_dataset('new_states', data=new_states)
             f.create_dataset('terminals', data=terminals)
 
-        # init sftp
-        transport = paramiko.Transport((self.host, self.port))
-        transport.connect(username=self.username, password=self.password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        gpu_alive = True
 
-        # Upload Experience
-        sftp.put(self.new_data_local, self.new_data_remote)
+        try:
+            transport, sftp = self.get_sftp_channel()
 
-        # upload config, if changed
-        if config_changed:
-            with open(self.training_params_local, 'w') as f:
-                json.dump(self.current_gpu_config, f, sort_keys=True, indent=4)
+            sftp.stat(self.remote_signal_alive)
 
-            sftp.put(self.training_params_local, self.training_params_remote)
+            transport.close()
+            sftp.close()
+        except IOError:
+            gpu_alive = False
 
-        # Close
-        sftp.close()
-        transport.close()
+        command = "touch " + self.remote_signal_train
 
-        logging.debug("Training on GPU")
-        if self.script_remote is None:
-            print("script_remote missing!")
-            return None
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(
-            paramiko.AutoAddPolicy())
-
-        ssh.connect(self.host, self.port, self.username, self.password)
-
-        command = "python " + self.script_remote
-        stdin, stdout, stderr = ssh.exec_command(command)
-
-        exit_status = stdout.channel.recv_exit_status()
-
-        if exit_status != 0:
-            print("Error: ", exit_status)
-            [print(err) for err in stderr.readlines()]
-
+        ssh = self.get_ssh_channel()
+        ssh.exec_command(command)
         ssh.close()
 
-        # download the new weights
+        # Upload Experience
+        transport, sftp = self.get_sftp_channel()
+        sftp.put(self.local_new_data, self.remote_new_data)
 
-        # init sftp
-        transport = paramiko.Transport((self.host, self.port))
-        transport.connect(username=self.username, password=self.password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        # upload training parameters, if changed
+        if config_changed:
+            with open(self.local_training_params, 'w') as f:
+                json.dump(self.current_gpu_config, f, sort_keys=True, indent=4)
+
+            sftp.put(self.local_training_params, self.remote_training_params)
+
+        transport.close()
+        sftp.close()
+
+        # if training file is dead, launch it (with id)
+        if not gpu_alive:
+            Thread(target=self.run_training_script).start()
+
+        transport, sftp = self.get_sftp_channel()
+
+        while True:
+            try:
+                sftp.stat(self.remote_signal_train)
+            except IOError:
+                # training_signal is gone, that means gpu is done training!
+                break
 
         # Download Model
-        logging.debug("Weights remote: ", self.model_weights_remote)
-        logging.debug("Weights local: ", self.model_weights_local)
-        sftp.get(self.model_weights_remote, self.model_weights_local)
+        sftp.get(self.remote_model, self.local_model)
 
-        # Close
-        sftp.close()
         transport.close()
+        sftp.close()
 
         self.done_training = True
 
-    def send_model_to_gpu(self):
-        # init sftp
-        transport = paramiko.Transport((self.host, self.port))
-        transport.connect(username=self.username, password=self.password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+    def run_training_script(self):
+        print("run training script")
 
-        # Upload Model & Weights
-        # todo: check if keras model save for lambda layers has been fixed. Until then, hardcode model on gpu!
-        # sftp.put(self.model_config_local, self.model_config_remote)
-        sftp.put(self.model_weights_local, self.model_weights_remote)
+        logging.debug("Start script on GPU")
+        if self.remote_script_train is None:
+            raise IOError('script_remote missing!')
 
-        # upload initial config
-        with open(self.training_params_local, 'w') as f:
-            json.dump(self.current_gpu_config, f, sort_keys=True, indent=4)
+        command = "python " + self.remote_script_train + " " + self.id
 
-        sftp.put(self.training_params_local, self.training_params_remote)
+        ssh = self.get_ssh_channel()
 
-        # Close
-        sftp.close()
-        transport.close()
-
-    #
-    # Downloads model weights from GPU
-    # Returns path to model weights
-    #
-    def fetch_model_config_from_gpu(self):
-        # init sftp
-        transport = paramiko.Transport((self.host, self.port))
-        transport.connect(username=self.username, password=self.password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
-
-        # Download Model
-        sftp.get(self.model_config_remote, self.model_config_local)
-
-        # Close
-        sftp.close()
-        transport.close()
-
-        return self.model_config_local
-
-    def test_on_gpu(self):
-        print("test on gpu")
-        if self.test_script_remote is None:
-            print("test_script_remote missing!")
-            return None
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(
-            paramiko.AutoAddPolicy())
-
-        ssh.connect(self.host, self.port, self.username, self.password)
-
-        command = "python " + self.test_script_remote
+        #####
         stdin, stdout, stderr = ssh.exec_command(command)
 
         exit_status = stdout.channel.recv_exit_status()
@@ -226,31 +200,77 @@ class GpuTrainer(object):
         if exit_status != 0:
             print("Error: ", exit_status)
             [print(err) for err in stderr.readlines()]
-
-        print(stdout.read())
-
+        #####
         ssh.close()
+
+    def send_model_to_gpu(self):
+
+        # Upload Model
+        transport, sftp = self.get_sftp_channel()
+        sftp.put(self.local_model, self.remote_model)
+
+        # upload initial config
+        with open(self.local_training_params, 'w') as f:
+            json.dump(self.current_gpu_config, f, sort_keys=True, indent=4)
+
+        sftp.put(self.local_training_params, self.remote_training_params)
+        transport.close()
+        sftp.close()
 
     def is_done_training(self):
         return self.done_training
 
+
 if __name__ == "__main__":
+    gpu = GpuTrainer({
+        "epochs_start": 500,
+        "epochs_end": 1000,
+        "batch_size_start": 25,
+        "batch_size_end": 100,
+        "trainings_before_param_update": 5,
+        "trainings_until_end_config": 25,
+        "trainings_without_target": 3,
+        "discount_factor": 0.99,
+        "target_update_rate": 0.01,
+        "gpu_settings": {
+            "host": "137.226.189.187",
+            "port": 22,
+            "user": "useradmin",
+            "password": "cocacola",
 
-    gpu = GpuTrainer(os.path.join(os.getcwd(), "..", "..", ""), print)
+            "local_data_root": "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\nn-data\\",
+            "local_new_data": "new_data.h5",
+            "model_config_local": "model.json",
+            "model_weights_local": "weights.h5",
+            "local_training_params": "train_params.json",
 
-    import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
-    import numpy as np
+            "remote_data_root": "/home/useradmin/Dokumente/rm505424/CENSE/Christian/",
+            "remote_new_data": "training_data/data/new_data/new_data.h5",
+            "model_config_remote": "training_data/model/model.json",
+            "model_weights_remote": "training_data/model/weights.h5",
+            "remote_training_params": "training_data/train_params.json",
 
-    model = Factory.model_simple_conv((50, 50), 6)
-    print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+            "script_remote": "train_model_acceleration.py",
+            "test_script_remote": "test_model.py",
+            "script_reset": "reset.py"
+        }
+    }, print)
 
-    model.save_weights(gpu.model_weights_local)
-    gpu.send_model_to_gpu()
+    gpu.reset()
 
-    gpu.test_on_gpu()
-
-    model.load_weights(gpu.model_weights_local)
-
-    print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
-
+    # import Cense.Agent.NeuralNetworkFactory.nnFactory as Factory
+    # import numpy as np
+    #
+    # model = Factory.model_simple_conv((50, 50), 6)
+    # print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+    #
+    # model.save_weights(gpu.model_weights_local)
+    # gpu.send_model_to_gpu()
+    #
+    # gpu.test_on_gpu()
+    #
+    # model.load_weights(gpu.model_weights_local)
+    #
+    # print("local", model.predict(np.ones((1, 50, 50)), batch_size=1))
+    #
     print("done")

@@ -2,6 +2,8 @@
 <rtde_config>
 	<recipe key="state">
 		<field name="actual_TCP_pose" type="VECTOR6D"/>
+		<field name="actual_q" type="VECTOR6D"/>
+		<field name="actual_TCP_speed" type="VECTOR6D"/>
 	</recipe>
 
 	<recipe key="target_pose">

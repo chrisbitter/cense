@@ -1,0 +1,71 @@
+{
+  "collector": {
+    "resume_training": 0,
+    "exploration_probability_start": 1,
+    "exploration_probability_end": 0.2,
+    "exploration_probability_runs_until_end": 6000,
+    "exploration_probability_boost_runs_until_end": 1000,
+    "runs_before_update": 1,
+    "runs_before_advancing_start": 10,
+    "runs_before_testing_from_start": 25,
+    "min_steps_before_model_save": 30,
+    "continue_after_success": 0
+  },
+  "trainer": {
+    "epochs_start": 200,
+    "epochs_end": 500,
+    "batch_size_start": 25,
+    "batch_size_end": 100,
+    "trainings_before_param_update": 5,
+    "trainings_until_end_config": 20,
+    "trainings_without_target": 5,
+    "discount_factor": 0.99,
+    "target_update_rate": 0.01,
+    "buffer_size": 500,
+    "gpu_settings":{
+      "host": "137.226.189.187",
+      "port": 22,
+      "user": "useradmin",
+      "password": "cocacola",
+
+      "local_data_root": "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\nn-data\\",
+      "new_data_local": "new_data.h5",
+      "model_config_local": "model.json",
+      "model_weights_local": "weights.h5",
+      "training_params_local": "train_params.json",
+
+      "remote_data_root": "/home/useradmin/Dokumente/rm505424/CENSE/Christian/",
+      "new_data_remote": "training_data/data/new_data/new_data.h5",
+      "model_config_remote": "training_data/model/model.json",
+      "model_weights_remote": "training_data/model/weights.h5",
+      "training_params_remote": "training_data/train_params.json",
+
+      "script_remote": "train_model_acceleration.py",
+      "test_script_remote": "test_model.py",
+      "script_reset": "reset.py"
+    }
+  },
+  "environment": {
+
+    "checkpoint_distance": 0.05,
+
+    "punishment_wire": -1,
+    "punishment_insufficient_progress": -1,
+    "punishment_old_checkpoint": -0.5,
+    "reward_goal": 1,
+    "reward_new_checkpoint": 1,
+    "reward_generic": -0.1,
+
+    "step_watchdog": 10,
+
+    "translation_acceleration_forward": 0.01,
+    "translation_acceleration_sideways": 0.01,
+    "rotation_acceleration": 10,
+
+    "min_translation_velocity_forward": 0,
+    "max_translation_velocity_forward": 0.02,
+
+    "max_abs_translation_velocity_sideways": 0.02,
+    "max_abs_rotation_velocity": 30
+  }
+}

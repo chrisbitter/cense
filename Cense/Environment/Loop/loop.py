@@ -4,10 +4,9 @@ import threading
 
 
 class Loop:
-    def __init__(self, set_status_func):
+    def __init__(self):
 
-        self.set_status_func = set_status_func
-        self.set_status_func("Setup Loop")
+        print("Setup Loop")
 
         self.timestamp_touched = 0
         self.timestamp_not_touched = 0
@@ -59,8 +58,8 @@ class Loop:
         return self.has_touched_wire(time.time())
 
 if __name__ == "__main__":
-    loop = Loop(print)
+    loop = Loop()
 
     while True:
-        print(loop.has_touched_wire())
+        print(loop.has_touched_wire(time.time()))
         input()

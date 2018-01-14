@@ -2,10 +2,15 @@ import os
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+from Cense.Agent.NeuralNetworkFactory import nnFactory as Factory
 import time
 
 class Visualizer(object):
     def __init__(self):
+
+        self.model = Factory.model_acceleration_q((50,50), (3,), 27)
+        self.model.load_weights('model/weights.h5')
+
         new_data_folder = os.path.dirname(os.path.abspath(__file__))
 
         self.states = None
@@ -20,6 +25,7 @@ class Visualizer(object):
                 with h5py.File(os.path.join(new_data_folder, new_data_file), 'r') as f:
                     if self.states is None:
                         self.states = f['states'][:]
+                        self.velocities = f['velocities'][:]
                         self.actions = f['actions'][:]
                         self.rewards = f['rewards'][:]
                         self.suc_states = f['suc_states'][:]
@@ -58,9 +64,17 @@ class Visualizer(object):
                     # else:
                     #     plt.imshow(np.ones(self.suc_states[index*rows*cols + col + row*cols].shape), cmap='gray').norm.vmax = 1
 
+                    q_vals = self.model.predict([np.expand_dims(self.states[index*rows*cols + col + row*cols], axis=0), np.expand_dims(self.velocities[index*rows*cols + col + row*cols], axis=0)])
+
+                    print(self.terminals[index*rows*cols + col + row*cols])
+                    print(self.actions[index*rows*cols + col + row*cols])
+                    print(q_vals)
+
             #plt.tight_layout()
             plt.draw()
             plt.pause(.001)
+            input()
+            #
 
 
 

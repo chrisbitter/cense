@@ -29,17 +29,20 @@ class TerminalStateError(Exception):
     def __init__(self, *args):
         super(TerminalStateError, self).__init__(*args)
 
+
 class SpawnedInTerminalStateError(TerminalStateError):
     def __init__(self, *args):
         super(SpawnedInTerminalStateError, self).__init__(*args)
+
 
 class ExitedInTerminalStateError(TerminalStateError):
     def __init__(self, *args):
         super(ExitedInTerminalStateError, self).__init__(*args)
 
+
 class RtdeController(object):
     # begin variable and object setup
-    ROBOT_HOST = '137.226.189.172'
+    ROBOT_HOST = '137.226.189.149'
     ROBOT_PORT = 30004
     config_filename = fn = os.path.join(os.path.dirname(__file__), 'ur5_configuration.xml')
 
@@ -50,13 +53,13 @@ class RtdeController(object):
 
     keep_running = True
 
-    # CONSTRAINT_MIN = np.array([-.19, -.38, .17])
-    # CONSTRAINT_MAX = np.array([.33, -.27, .7])
+    # CONSTRAINT_MIN = np.array([-.21, -.54, -.2])
+    # CONSTRAINT_MAX = np.array([.28, -.3, .7])
 
-    CONSTRAINT_MIN = np.array([-.19, -.38, .07])
-    CONSTRAINT_MAX = np.array([.33, -.27, .8])
+    CONSTRAINT_MIN = np.array([-.26 , -.41, .1])
+    CONSTRAINT_MAX = np.array([.30, -.26, 0.68])
 
-    SPEED_FRACTION = .7
+    SPEED_FRACTION = .6
 
     connection = None
 
@@ -66,12 +69,11 @@ class RtdeController(object):
     # this is needed, because every method pauses synchronization to keep things from messing up
     lock = threading.Lock()
 
-    def __init__(self, set_status_func):
+    def __init__(self):
 
-        self.set_status_func = set_status_func
-        self.set_status_func("Setup Robot")
+        print("Setup Robot")
 
-        self.loop = Loop(set_status_func)
+        self.loop = Loop()
 
         conf = rtde_config.ConfigFile(self.config_filename)
         state_names, state_types = conf.get_recipe('state')
@@ -125,6 +127,9 @@ class RtdeController(object):
 
         self.connection.send_start()
 
+        self.abort_signal.__dict__[b"input_int_register_0"] = 0
+        self.connection.send(self.abort_signal)
+
     def current_pose(self):
         with self.lock:
             touching_wire = self.loop.is_touching_wire()
@@ -138,9 +143,19 @@ class RtdeController(object):
 
             return np.array(state.__dict__[b'actual_TCP_pose']), touching_wire
 
+    # def move_angle_to_zero(self):
+    #     with self.lock:
+    #         state = None
+    #
+    #         while state is None:
+    #             state = self.connection.receive()
+    #
+    #         return np.array(state.__dict__[b'actual_TCP_pose']), touching_wire
+
     # moves tcp to specified pose
     # if wire is touched, move back to old position
     def move_to_pose(self, target_pose, force=False):
+
         with self.lock:
 
             if target_pose[0] < self.CONSTRAINT_MIN[0] or target_pose[0] > self.CONSTRAINT_MAX[0] \
@@ -162,13 +177,12 @@ class RtdeController(object):
             if self.loop.is_touching_wire() and not force:
                 raise SpawnedInTerminalStateError
 
+            mean_percentage_traveled = 1
             timestamp = time.time()
 
-            touched_wire = False
             while True:
 
                 if self.loop.has_touched_wire(timestamp):
-                    touched_wire = True
                     if not force:
                         break
 
@@ -178,14 +192,26 @@ class RtdeController(object):
                 translation_deviation = np.sum(
                     np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - target_pose[:3]))
                 rotation_deviation = np.sum(np.absolute(((np.array(
-                    state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % (2*np.pi)) - np.pi))
+                    state.__dict__[b'actual_TCP_pose'][3:] - target_pose[3:]) + np.pi) % (2 * np.pi)) - np.pi))
 
                 if translation_deviation < self.ERROR_TRANSLATION and rotation_deviation < self.ERROR_ROTATION:
                     break
 
-            if (touched_wire or self.loop.has_touched_wire(timestamp)) and not force:
+            touched_wire = False
+
+            if self.loop.has_touched_wire(timestamp) and not force:
+
+                touched_wire = True
 
                 self.abort_movement()
+
+                state = self.connection.receive()
+                abort_pose = np.array(state.__dict__[b'actual_TCP_pose'])
+
+                distance_traveled = np.absolute(abort_pose - start_pose)
+                distance_expected = np.absolute(target_pose - start_pose) + np.finfo(float).eps
+
+                mean_percentage_traveled = np.mean(np.clip(distance_traveled / distance_expected, 0, 1))
 
                 for i in range(6):
                     self.target_pose.__dict__[b"input_double_register_" + str(i).encode()] = start_pose[i]
@@ -196,7 +222,7 @@ class RtdeController(object):
                     translation_deviation = np.sum(
                         np.absolute(state.__dict__[b'actual_TCP_pose'][:3] - start_pose[:3]))
                     rotation_deviation = np.sum(np.absolute(((np.array(
-                        state.__dict__[b'actual_TCP_pose'][3:] - start_pose[3:]) + np.pi) % (2*np.pi)) - np.pi))
+                        state.__dict__[b'actual_TCP_pose'][3:] - start_pose[3:]) + np.pi) % (2 * np.pi)) - np.pi))
 
                     if translation_deviation < self.ERROR_TRANSLATION \
                             and rotation_deviation < self.ERROR_ROTATION:
@@ -206,49 +232,53 @@ class RtdeController(object):
             if self.loop.is_touching_wire() and not force:
                 raise ExitedInTerminalStateError
 
-            return touched_wire
+            return touched_wire, mean_percentage_traveled
 
     def abort_movement(self):
+        logging.debug('abort')
+
         self.abort_signal.__dict__[b"input_int_register_0"] = 1
         self.connection.send(self.abort_signal)
+
+        while True:
+            state = self.connection.receive()
+            logging.debug(np.sum(np.absolute(state.__dict__[b'actual_TCP_speed'])))
+            if np.sum(np.absolute(state.__dict__[b'actual_TCP_speed'])) < 0.01:
+                break
+
         self.abort_signal.__dict__[b"input_int_register_0"] = 0
         self.connection.send(self.abort_signal)
 
 
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.ERROR)
 
-    import matplotlib.pyplot as plt
-    from matplotlib.figure import Figure
+    import socket
 
-    con = RtdeController(print)
+    controller = RtdeController()
 
-    rotation = 30 * np.pi / 180
-    # rotation *= -1
+    controller.abort_movement()
 
-    x = []
-    y = []
+    try:
+        pose, _ = controller.current_pose()
+        controller.move_to_pose(pose)
+    except:
+        pass
+    # host = "137.226.189.172"
+    # port = 29999
+    #
+    # s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #
+    # s.connect((host, port))
 
+    # state = controller.connection.receive()
 
-    for i in range(1000):
-        now = time.time()
-        pose, _ = con.current_pose()
-        pose[4] += rotation
-        con.move_to_pose(pose)
+    # print(pose)
 
-        execution_time = time.time()-now
+    # pose = np.array([.3, -.3, .458, 0, np.pi / 2, 0])
 
-        rotation *= -1
+    pose, _ = controller.current_pose()
 
-        x.append(i)
-        y.append(execution_time)
+    controller.move_to_pose(pose)
 
-        plt.plot(x, y)
-        plt.draw()
-        plt.pause(0.001)
-
-        timeout = time.time() + 5
-        while time.time() < timeout:
-            pass
-
-
+        # pose[4] = pose[4] % (2*np.pi)

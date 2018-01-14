@@ -8,7 +8,7 @@ from pyfirmata import Arduino, util
 
 import Cense.Agent.NeuralNetworkFactory.nnFactory as factory
 # import Cense.NeuralNetworkFactory.nnFactory as factory
-from Cense.Environment.Camera.camera_videocapture import Camera
+from Cense.Environment.Camera.camera import Camera
 
 
 def save_array():
