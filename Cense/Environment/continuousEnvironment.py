@@ -28,7 +28,7 @@ class ContinuousEnvironment(object):
 
     START_POSE = np.array([.27, Y_ENGAGED, .38, 0, -np.pi/2, 0])
 
-    GOAL_X = -.213
+    GOAL_X = -.23
     #GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
 
     ###Reinforcement Learning
