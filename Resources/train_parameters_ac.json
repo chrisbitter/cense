@@ -32,7 +32,7 @@
       "local_model": "actor.h5",
       "local_training_params": "train_params.json",
 
-      "remote_data_root": "/home/cscheiderer/CENSE/",
+      "remote_data_root": "/home/cscheiderer/CENSE_gitlab/demonstrator_RLAlgorithm/Cense/Agent/Trainer/GPU/",
       "remote_new_data": "training_data/data/new_data/new_data.h5",
       "remote_model": "training_data/model/actor.h5",
       "remote_training_params": "training_data/train_params.json",
@@ -46,7 +46,7 @@
   },
   "environment": {
 
-    "checkpoint_distance": 0.05,
+    "checkpoint_distance": 0.08,
 
     "punishment_wire": -1,
     "punishment_insufficient_progress": -1,

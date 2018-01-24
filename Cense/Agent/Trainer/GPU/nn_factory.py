@@ -41,7 +41,8 @@ def actor_network(input_shape):
                   optimizer='adam')
 
     return model
-    
+
+
 def critic_network(input_shape):
     state_input = Input(shape=input_shape)
     action_input = Input(shape=(3,))

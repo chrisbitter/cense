@@ -162,8 +162,6 @@ while True:
         
         # init experience buffer with indices
         experience_buffer = range(states.shape[0])
-        probabilities = (np.arange(states.shape[0])+1)/states.shape[0]
-        probabilities /= probabilities.sum()
 
         for epoch in range(epochs):
 

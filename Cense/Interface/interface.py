@@ -197,12 +197,12 @@ class CockpitWindow(QtWidgets.QMainWindow):
         layout = QtWidgets.QGridLayout()
         view.setLayout(layout)
 
-        layout.addWidget(steps_widget, 1, 1)
-        layout.addWidget(state_plot_widget, 1, 2)
-        layout.addWidget(exploration_widget, 1, 3)
-        layout.addWidget(test_steps_widget, 2, 1)
-        layout.addWidget(action_widget, 2, 2)
-        layout.addWidget(self.text_widget, 2, 3)
+        #layout.addWidget(steps_widget, 1, 1)
+        layout.addWidget(state_plot_widget, 1, 1)
+        #layout.addWidget(exploration_widget, 1, 3)
+        #layout.addWidget(test_steps_widget, 2, 1)
+        layout.addWidget(action_widget, 1, 2)
+        #layout.addWidget(self.text_widget, 2, 3)
 
         self.agent.steps_signal.connect(self.update_steps)
         self.agent.state_signal.connect(self.update_state)
