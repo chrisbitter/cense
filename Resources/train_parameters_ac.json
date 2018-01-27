@@ -31,11 +31,14 @@
       "local_new_data": "new_data.h5",
       "local_model": "actor.h5",
       "local_training_params": "train_params.json",
+      "local_gpu_config": "gpu_config.json",
 
-      "remote_data_root": "/home/cscheiderer/CENSE/",
-      "remote_new_data": "training_data/data/new_data/new_data.h5",
-      "remote_model": "training_data/model/actor.h5",
-      "remote_training_params": "training_data/train_params.json",
+      "remote_data_root": "/home/cscheiderer/CENSE/training_data/",
+      "remote_new_data": "data/new_data/new_data.h5",
+      "remote_data": "data/data.h5",
+      "remote_model": "model/actor.h5",
+      "remote_training_params": "train_params.json",
+      "remote_gpu_config": "gpu_config.json",
 
       "remote_signal_train": "training_data/training_signal_",
       "remote_signal_alive": "training_data/alive_signal_",
@@ -59,6 +62,7 @@
     
     "translation_forward_max_distance": 0.03,
     "translation_sideways_max_distance": 0.03,
-    "rotation_max_angle": 90
+    "rotation_max_angle": 90,
+    "start_pose": [0.27, -0.38, 0.38, 0, -90, 0]
   }
 }

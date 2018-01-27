@@ -7,7 +7,7 @@ from __future__ import print_function
 from scipy.misc import imsave
 import numpy as np
 import time
-from Cense.Agent.NeuralNetworkFactory.nnFactory import model_dueling as Model
+from Agent.NeuralNetworkFactory import model_dueling as Model
 from keras import backend as K
 
 
