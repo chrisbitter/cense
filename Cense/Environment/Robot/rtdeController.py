@@ -42,7 +42,8 @@ class ExitedInTerminalStateError(TerminalStateError):
 
 class RtdeController(object):
     # begin variable and object setup
-    ROBOT_HOST = '137.226.189.149'
+    # 137.226.189.149
+    ROBOT_HOST = '169.254.158.1'
     ROBOT_PORT = 30004
     config_filename = fn = os.path.join(os.path.dirname(__file__), 'ur5_configuration.xml')
 

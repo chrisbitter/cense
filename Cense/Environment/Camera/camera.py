@@ -49,15 +49,9 @@ if __name__ == '__main__':
 
     cam = Camera((40, 40, 3))
 
-    orig, rgb, gray, gray_c = cam.capture_image()
+    rgb = cam.capture_image()
 
     plt.figure()
-    plt.imshow(orig)
-    plt.figure()
     plt.imshow(rgb)
-    plt.figure()
-    plt.imshow(gray, cmap='gray')
-    plt.figure()
-    plt.imshow(gray_c, cmap='gray')
 
     plt.show()

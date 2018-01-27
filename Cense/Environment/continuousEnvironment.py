@@ -123,7 +123,7 @@ class ContinuousEnvironment(object):
                 reward = .8 * (self.CURRENT_STEP_WATCHDOG / self.STEP_WATCHDOG) * self.PUNISHMENT_INSUFFICIENT_PROGRESS \
                          + .2 * action[0]
 
-            print(action, reward, mean_percentage_traveled)
+            # print(action, reward, mean_percentage_traveled)
 
             if self.CURRENT_STEP_WATCHDOG >= self.STEP_WATCHDOG:
                 self.reset_stepwatchdog()
