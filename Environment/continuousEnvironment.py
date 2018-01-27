@@ -152,7 +152,7 @@ class ContinuousEnvironment(object):
     def observe_state(self):
         logging.debug("Real Environment - observe_state")
 
-        return self.camera.capture_image()
+        return self.camera.get_frame()
 
     def is_at_goal(self):
         logging.debug("Real Environment - is_at_goal")

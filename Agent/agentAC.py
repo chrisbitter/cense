@@ -1,22 +1,22 @@
 import json
 import os
 import time
-import numpy as np
 from threading import Thread
 
-import NeuralNetwork.nnFactory as Factory
+import numpy as np
 import pyqtgraph as pg
 import tensorflow as tf
 from PyQt5.QtCore import pyqtSignal
 
-from Agent.Trainer.gpuTrainer import GpuTrainer as Trainer
+import NeuralNetwork.nnFactory as Factory
+from Agent.Noise import emerging_gaussian as Noise
 from Environment.Robot.rtdeController import ExitedInTerminalStateError
 from Environment.Robot.rtdeController import SpawnedInTerminalStateError
 from Environment.continuousEnvironment import ContinuousEnvironment as World, UntreatableStateError, \
     InsufficientProgressError
 from Environment.dummyWorld import IllegalPoseException
 from Interface.interface import RunningMode
-from Resources.Noise.emerging_gaussian import emerging_gaussian as Noise
+from Trainer.gpuTrainer import GpuTrainer as Trainer
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'

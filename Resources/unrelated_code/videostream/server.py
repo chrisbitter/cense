@@ -19,7 +19,6 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-
     return cam.get_frame()
 
 app.run(host=args.host, port=args.port)

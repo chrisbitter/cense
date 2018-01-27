@@ -1,11 +1,9 @@
 # from Cense.World.world import World
-import logging
 # import RTDE_Controller_CENSE as rtde
-import math
 
 import numpy as np
 
-from Resources.unrelated_code.camera_pygame import Camera
+from Environment.Camera.camera_pygame import Camera
 
 
 class TerminalStateError(Exception):
