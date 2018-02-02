@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Model>
+    <Network Name="Actor">
+        <Layer Type="Input" Size="40x40"/>
+        <Layer Type="Convolutional" Shape="36x36" Size="30" Kernel="5x5"/>
+        <Layer Type="Pooling" Kernel="19x19"/>
+        <Layer Type="Convolutional" Shape="14x14" Size="15" Kernel="5x5"/>
+        <Layer Type="Pooling" Kernel="8x8"/>
+        <Layer Type="Convolutional" Shape="5x5" Size="10" Kernel="3x3"/>
+        <Layer Type="Flatten" Size="250"/>
+        <Layer Type="Dropout" Size="250"/>
+        <Layer Type="Fully-Connected" Size="400"/>
+        <Layer Type="Dropout" Size="400"/>
+        <Layer Type="Fully-Connected" Size="200"/>
+        <Layer Type="Dropout" Size="200"/>
+        <Layer Type="Fully-Connected" Size="100"/>
+        <Layer Type="Dropout" Size="100"/>
+        <Layer Type="Fully-Connected" Size="1"/>
+        <Layer Type="Fully-Connected" Size="1"/>
+        <Layer Type="Fully-Connected" Size="1"/>
+        <Layer Type="Output" Size="3"/>
+    </Network>
+    <Network Name="Critic">
+        <Layer Type="Input" Size="40x40"/>
+        <Layer Type="Convolutional" Shape="36x36" Size="30" Kernel="5x5"/>
+        <Layer Type="Pooling" Kernel="19x19"/>
+        <Layer Type="Convolutional" Shape="14x14" Size="15" Kernel="5x5"/>
+        <Layer Type="Pooling" Kernel="8x8"/>
+        <Layer Type="Convolutional" Shape="5x5" Size="10" Kernel="3x3"/>
+        <Layer Type="Flatten" Size="250"/>
+        <Layer Type="Dropout" Size="250"/>
+        <Layer Type="Input" Size="3"/>
+        <Layer Type="Fully-Connected" Size="200"/>
+        <Layer Type="Fully-Connected" Size="200"/>
+        <Layer Type="Fully-Connected" Size="400"/>
+        <Layer Type="Dropout" Size="400"/>
+        <Layer Type="Fully-Connected" Size="200"/>
+        <Layer Type="Dropout" Size="200"/>
+        <Layer Type="Fully-Connected" Size="100"/>
+        <Layer Type="Dropout" Size="100"/>
+        <Layer Type="Output" Size="1"/>
+    </Network>
+</Model>
