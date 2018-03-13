@@ -1,7 +1,7 @@
 import shutil
 import os
 
-root_folder = "/home/cscheiderer/CENSE/"
+root_folder = "/home/cscheiderer/CENSE_gitlab/demonstrator_RLAlgorithm/GPU/"
 
 if os.path.exists(root_folder + 'training_data'):
   print("Deleting folder 'training_data'")

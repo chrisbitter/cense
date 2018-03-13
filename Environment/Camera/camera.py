@@ -12,7 +12,7 @@ class Camera(object):
 
         print("Setup Camera")
 
-        self.__camera = Device(0)
+        self.__camera = Device(1)
         self.SIZE = size
 
     def get_frame(self):
@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
 
-    dim = (360, 360, 3)
+    dim = (40, 40, 3)
 
     cam = Camera(dim)
 

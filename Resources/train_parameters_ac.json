@@ -10,7 +10,7 @@
     "runs_before_testing_from_start": 50,
     "min_steps_before_model_save": 30,
     "continue_after_success": 1,
-    "data_storage": "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Experiment_Data\\"
+    "data_storage": "C:\\Gitlab\\demonstrator_RLAlgorithm\\Resources\\Experiment_Data\\"
   },
   "trainer": {
     "epochs_start": 1,
@@ -22,18 +22,18 @@
     "discount_factor": 0.99,
     "target_update_rate": 0.001,
     "gpu_settings":{
-      "host": "169.254.158.2",
+      "host": "137.226.188.42",
       "port": 22,
       "user": "cscheiderer",
       "password": "Y#Imaany4$GolK",
 
-      "local_data_root": "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\nn-data\\",
+      "local_data_root": "C:\\Gitlab\\demonstrator_RLAlgorithm\\Resources\\nn-data\\",
       "local_new_data": "new_data.h5",
       "local_model": "actor.h5",
       "local_training_params": "train_params.json",
       "local_gpu_config": "gpu_config.json",
 
-      "remote_data_root": "/home/cscheiderer/CENSE/training_data/",
+      "remote_data_root": "/home/cscheiderer/CENSE_gitlab/training_data/",
       "remote_new_data": "data/new_data/new_data.h5",
       "remote_data": "data/data.h5",
       "remote_model": "model/actor.h5",

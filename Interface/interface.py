@@ -108,7 +108,7 @@ class CockpitWindow(QtWidgets.QMainWindow):
             action_plot_item.setYRange(-1, 1)
 
             from Agent.agentAC import AgentActorCritic as Agent
-            parameter_file = "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\train_parameters_ac.json"
+            parameter_file = "C:\\Gitlab\\demonstrator_RLAlgorithm\\Resources\\train_parameters_ac.json"
 
         elif self.mode == Mode.DUMMY:
             title += "Dummy"
