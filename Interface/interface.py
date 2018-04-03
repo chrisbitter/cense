@@ -43,7 +43,7 @@ class CockpitWindow(QtWidgets.QMainWindow):
         if self.mode == Mode.DQN:
             parameter_file = "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\train_parameters_dqn.json"
         elif self.mode == Mode.AC:
-            parameter_file = "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\train_parameters_ac.json"
+            parameter_file = "C:\\Users\\Cense\\PycharmProjects\\Cense\\Resources\\train_parameters_ac.json"
         elif self.mode == Mode.DUMMY:
             pass
         else:
@@ -75,7 +75,6 @@ class CockpitWindow(QtWidgets.QMainWindow):
             action_plot_item.setTitle("Q-Values")
 
             from Agent.agentDQN import DeepQNetworkAgent as Agent
-            parameter_file = "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\train_parameters_dqn.json"
 
         elif self.mode == Mode.AC:
             title += "AC"
@@ -108,8 +107,7 @@ class CockpitWindow(QtWidgets.QMainWindow):
             action_plot_item.setYRange(-1, 1)
 
             from Agent.agentAC import AgentActorCritic as Agent
-            parameter_file = "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\train_parameters_ac.json"
-
+            
         elif self.mode == Mode.DUMMY:
             title += "Dummy"
 
@@ -133,17 +131,13 @@ class CockpitWindow(QtWidgets.QMainWindow):
 
             action_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
 
-
-
             action_plot_item = action_widget.getPlotItem()
             action_plot_item.enableAutoRange()
             action_plot_item.addItem(self.action_plot)
             action_plot_item.setTitle("Actions")
 
             action_plot_item.setYRange(-1, 1)
-
             Agent = DummyAgent
-            parameter_file = ""
         else:
             raise IOError("Unknown mode!")
 

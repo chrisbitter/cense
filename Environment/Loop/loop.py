@@ -17,7 +17,7 @@ class Loop:
         thread.start()
 
     def check_connection(self):
-        board = Arduino('com3')
+        board = Arduino('com4')
         it = util.Iterator(board)
         it.setDaemon(True)
         it.start()

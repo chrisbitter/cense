@@ -1,8 +1,8 @@
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 
-from Environment import ContinuousEnvironment as Environment
-from Environment import RtdeController
+from Environment.continuousEnvironment import ContinuousEnvironment as Environment
+from Environment.Robot.rtdeController import RtdeController
 
 controller = RtdeController()
 

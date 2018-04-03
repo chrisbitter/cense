@@ -9,14 +9,13 @@ import tensorflow as tf
 from PyQt5.QtCore import pyqtSignal
 
 import NeuralNetwork.nnFactory as Factory
-from Agent.Noise import emerging_gaussian as Noise
-from Environment.Robot.rtdeController import ExitedInTerminalStateError
-from Environment.Robot.rtdeController import SpawnedInTerminalStateError
-from Environment.continuousEnvironment import ContinuousEnvironment as World, UntreatableStateError, \
-    InsufficientProgressError
-from Environment.dummyWorld import IllegalPoseException
+from Agent.Noise.emerging_gaussian import emerging_gaussian as Noise
+from Environment.Robot.rtdeController import IllegalPoseException, SpawnedInTerminalStateError, ExitedInTerminalStateError
+from Environment.continuousEnvironment import ContinuousEnvironment as World, UntreatableStateError, InsufficientProgressError
 from Interface.interface import RunningMode
 from Trainer.gpuTrainer import GpuTrainer as Trainer
+
+import logging
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
