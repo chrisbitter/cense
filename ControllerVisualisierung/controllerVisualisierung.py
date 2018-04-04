@@ -52,7 +52,8 @@ def testing_functor():
     actor_functor, critic_functor = prepare_theano_functions()
     im = cv.imread('cense_input_raw.png', cv.IMREAD_COLOR)
     resize_im = cv.resize(im,(40,40))
-    test = resize_im[np.newaxis, ...]
+    # test = np.random.random(input_shape)[np.newaxis, ...]  # This creates Random Input
+    test = resize_im[np.newaxis, ...]  # This loads a sample picture as input
     actor_layer_outs = actor_functor([test, 1.])
     # critic_layer_outs = critic_functor([test, 1.])
     critic_layer_outs = None
@@ -100,7 +101,6 @@ def generate_element_weights_vektor():
 
 if __name__ == "__main__":
     element_weights_vektor = generate_element_weights_vektor()
-    soll = 40 * 40 * 3 + 36 * 36 * 30 + 18 * 18 * 30 + 14 * 14 * 15 + 7 * 7 * 15 + 5 * 5 * 10 + 250 + 250 + 400 + 400 + 200 + 200 + 100 + 100 + 1 + 1 + 1 + 3
+    # soll = 40 * 40 * 3 + 36 * 36 * 30 + 18 * 18 * 30 + 14 * 14 * 15 + 7 * 7 * 15 + 5 * 5 * 10 + 250 + 250 + 400 + 400 + 200 + 200 + 100 + 100 + 1 + 1 + 1 + 3
 
     print(element_weights_vektor)
-    print(soll)
