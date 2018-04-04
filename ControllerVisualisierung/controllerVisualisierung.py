@@ -1,10 +1,11 @@
 import nnFactory as nnF
 from keras import backend as K
 import numpy as np
+import cv2 as cv
 
 '''
 This imports the nnFactory script that builds the actor model just like it is built before training, this then
-generates a random input to be able to calculate the activation maps. After that is done it then squeezes the
+generates an input from a sample image to be able to calculate the activation maps. After that is done it then squeezes the
 multidimensional numpy array into a one dimensional data structured vector according to the formatting stated by
 VCI:
 
@@ -34,40 +35,66 @@ def load_models():
 
 
 def prepare_theano_functions():
-    model, _ = load_models()
+    actor_model, critic_model = load_models()
 
-    inp = model.input                                            # input placeholder
-    outputs = [layer.output for layer in model.layers]           # all layer outputs
-    functor = K.function([inp] + [K.learning_phase()], outputs)  # evaluation function
-    return functor
+    actor_model.load_weights('actor.h5')
+    actor_inp = actor_model.input                                            # input placeholder
+    actor_outputs = [layer.output for layer in actor_model.layers]           # all layer outputs
+    actor_functor = K.function([actor_inp] + [K.learning_phase()], actor_outputs)  # evaluation function
+
+    critic_inp = critic_model.input                                            # input placeholder
+    critic_outputs = [layer.output for layer in critic_model.layers]           # all layer outputs
+    critic_functor = K.function([critic_inp] + [K.learning_phase()], critic_outputs)  # evaluation function
+    return actor_functor, critic_functor
 
 
 def testing_functor():
-    functor = prepare_theano_functions()
-    test = np.random.random(input_shape)[np.newaxis, ...]
-    layer_outs = functor([test, 1.])
-    return layer_outs
+    actor_functor, critic_functor = prepare_theano_functions()
+    im = cv.imread('cense_input_raw.png', cv.IMREAD_COLOR)
+    resize_im = cv.resize(im,(40,40))
+    test = resize_im[np.newaxis, ...]
+    actor_layer_outs = actor_functor([test, 1.])
+    # critic_layer_outs = critic_functor([test, 1.])
+    critic_layer_outs = None
+    return actor_layer_outs, critic_layer_outs
 
 
 def generate_element_weights_vektor():
-    layer_outs = testing_functor()
+    actor_layer_outs, critic_layer_outs = testing_functor()
     element_weights_vektor = []
-    for layer in layer_outs:
+    for alayer in actor_layer_outs:
         try:
-            i_max = len(layer[0])
-            j_max = len(layer[0][0])
-            k_max = len(layer[0][0][0])
+            i_max = len(alayer[0])
+            j_max = len(alayer[0][0])
+            k_max = len(alayer[0][0][0])
             for k in range(k_max):
                 for j in range(j_max):
                     for i in range(i_max):
-                        layer[0][i][j][k] = np.asscalar(layer[0][i][j][k])
-                        element_weights_vektor.append(layer[0][i][j][k])
+                        alayer[0][i][j][k] = np.asscalar(alayer[0][i][j][k])
+                        element_weights_vektor.append(alayer[0][i][j][k])
         except:
-            j_max = len(layer[0])
+            j_max = len(alayer[0])
             for j in range(j_max):
-                layer[0][j] = np.asscalar(layer[0][j])
-                element_weights_vektor.append(layer[0][j])
+                alayer[0][j] = np.asscalar(alayer[0][j])
+                element_weights_vektor.append(alayer[0][j])
                 # print(layer[0][j])
+    #
+    # for clayer in critic_layer_outs:
+    #     try:
+    #         i_max = len(clayer[0])
+    #         j_max = len(clayer[0][0])
+    #         k_max = len(clayer[0][0][0])
+    #         for k in range(k_max):
+    #             for j in range(j_max):
+    #                 for i in range(i_max):
+    #                     clayer[0][i][j][k] = np.asscalar(clayer[0][i][j][k])
+    #                     element_weights_vektor.append(clayer[0][i][j][k])
+    #     except:
+    #         j_max = len(clayer[0])
+    #         for j in range(j_max):
+    #             clayer[0][j] = np.asscalar(clayer[0][j])
+    #             element_weights_vektor.append(clayer[0][j])
+    #             # print(layer[0][j])
     return element_weights_vektor
 
 
