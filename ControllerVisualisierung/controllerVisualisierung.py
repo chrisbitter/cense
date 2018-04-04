@@ -102,5 +102,5 @@ if __name__ == "__main__":
     element_weights_vektor = generate_element_weights_vektor()
     soll = 40 * 40 * 3 + 36 * 36 * 30 + 18 * 18 * 30 + 14 * 14 * 15 + 7 * 7 * 15 + 5 * 5 * 10 + 250 + 250 + 400 + 400 + 200 + 200 + 100 + 100 + 1 + 1 + 1 + 3
 
-    print(len(element_weights_vektor))
+    print(element_weights_vektor)
     print(soll)
