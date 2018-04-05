@@ -2,6 +2,7 @@ import nnFactory as nnF
 from keras import backend as K
 import numpy as np
 import cv2 as cv
+# from matplotlib import pyplot as plt
 
 '''
 This imports the nnFactory script that builds the actor model just like it is built before training, this then
@@ -54,6 +55,7 @@ def testing_functor():
     resize_im = cv.resize(im,(40,40))
     # test = np.random.random(input_shape)[np.newaxis, ...]  # This creates Random Input
     test = resize_im[np.newaxis, ...]  # This loads a sample picture as input
+    print(type(test[0][0][0][0]))
     actor_layer_outs = actor_functor([test, 1.])
     # critic_layer_outs = critic_functor([test, 1.])
     critic_layer_outs = None
@@ -63,22 +65,23 @@ def testing_functor():
 def generate_element_weights_vektor():
     actor_layer_outs, critic_layer_outs = testing_functor()
     element_weights_vektor = []
+    layer_counter = 0
     for alayer in actor_layer_outs:
-        try:
-            i_max = len(alayer[0])
-            j_max = len(alayer[0][0])
-            k_max = len(alayer[0][0][0])
-            for k in range(k_max):
-                for j in range(j_max):
+        if not (layer_counter in [6, 7, 9, 11, 13]):
+            print(alayer[0].shape)
+            try:
+                i_max = len(alayer[0])
+                j_max = len(alayer[0][0])
+                k_max = len(alayer[0][0][0])
+                for k in range(k_max):
                     for i in range(i_max):
-                        alayer[0][i][j][k] = np.asscalar(alayer[0][i][j][k])
-                        element_weights_vektor.append(alayer[0][i][j][k])
-        except:
-            j_max = len(alayer[0])
-            for j in range(j_max):
-                alayer[0][j] = np.asscalar(alayer[0][j])
-                element_weights_vektor.append(alayer[0][j])
-                # print(layer[0][j])
+                        for j in range(j_max):
+                            element_weights_vektor.append(alayer[0][i][j][k].item())
+            except:
+                j_max = len(alayer[0])
+                for j in range(j_max):
+                    element_weights_vektor.append(alayer[0][j].item())
+        layer_counter += 1
     #
     # for clayer in critic_layer_outs:
     #     try:
@@ -102,5 +105,14 @@ def generate_element_weights_vektor():
 if __name__ == "__main__":
     element_weights_vektor = generate_element_weights_vektor()
     # soll = 40 * 40 * 3 + 36 * 36 * 30 + 18 * 18 * 30 + 14 * 14 * 15 + 7 * 7 * 15 + 5 * 5 * 10 + 250 + 250 + 400 + 400 + 200 + 200 + 100 + 100 + 1 + 1 + 1 + 3
+    image = []
+    for i in range(40):
+        image.append(element_weights_vektor[i*40:(i+1)*40])
+    # plt.imshow(image)
+    # plt.show()
 
+    soll = 40*40*3+36*36*30+18*18*30+14*14*15+7*7*15+5*5*10+400+200+100+1+1+1+3
+    print(soll)
+    print(len(element_weights_vektor))
     print(element_weights_vektor)
+
