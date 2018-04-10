@@ -16,6 +16,7 @@ from Interface.interface import RunningMode
 from Trainer.gpuTrainer import GpuTrainer as Trainer
 
 import logging
+from ControllerVisualisierung.controllerVisualisierung import Visualizer
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -101,6 +102,8 @@ class AgentActorCritic(pg.QtCore.QThread):
         if not collector_config["resume_training"]:
             self.trainer.reset()
             self.trainer.send_model_to_gpu()
+
+        self.visualizer = Visualizer()
 
     def run(self):
         if self.running_mode == RunningMode.TRAIN:
@@ -359,6 +362,8 @@ class AgentActorCritic(pg.QtCore.QThread):
         while not terminal:
 
             state = self.world.observe_state()
+
+            self.visualizer.visualize(self.model, state)
 
             self.state_signal.emit(state)
 
