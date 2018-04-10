@@ -101,6 +101,9 @@ class Visualizer():
         #             # print(layer[0][j])
         return element_weights_vektor
 
+    def visualize(self, model, state):
+        pass
+
 
 if __name__ == "__main__":
 
