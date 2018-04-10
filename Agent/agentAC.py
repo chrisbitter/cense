@@ -440,7 +440,7 @@ class AgentActorCritic(pg.QtCore.QThread):
             f.write(",".join(action_keys))
             f.write("\n")
 
-        while True:
+        while self.running_status == RunningStatus.RUN:
 
             try:
                 self.world.reset(hard_reset=True)

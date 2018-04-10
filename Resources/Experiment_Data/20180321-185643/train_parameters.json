@@ -1,0 +1,67 @@
+{
+    "collector": {
+        "continue_after_success": 1,
+        "data_storage": "C:\\Users\\Cense\\PycharmProjects\\Cense\\Resources\\Experiment_Data\\",
+        "exploration_probability_boost_runs_until_end": 50,
+        "exploration_probability_end": 0.2,
+        "exploration_probability_runs_until_end": 1000,
+        "exploration_probability_start": 0.5,
+        "min_steps_before_model_save": 30,
+        "resume_training": 1,
+        "runs_before_advancing_start": 10,
+        "runs_before_testing_from_start": 50,
+        "runs_before_update": 1
+    },
+    "environment": {
+        "checkpoint_distance": 0.08,
+        "punishment_insufficient_progress": -1,
+        "punishment_old_checkpoint": -0.5,
+        "punishment_wire": -1,
+        "reward_generic": -0.1,
+        "reward_goal": 1,
+        "reward_new_checkpoint": 1,
+        "rotation_max_angle": 90,
+        "start_pose": [
+            0.27,
+            -0.38,
+            0.38,
+            0,
+            -90,
+            0
+        ],
+        "step_watchdog": 10,
+        "translation_forward_max_distance": 0.03,
+        "translation_sideways_max_distance": 0.03
+    },
+    "trainer": {
+        "batch_size_end": 32,
+        "batch_size_start": 32,
+        "discount_factor": 0.99,
+        "epochs_end": 1,
+        "epochs_start": 1,
+        "gpu_settings": {
+            "host": "137.226.188.42",
+            "local_data_root": "C:\\Users\\Cense\\PycharmProjects\\Cense\\Resources\\nn-data\\",
+            "local_gpu_config": "gpu_config.json",
+            "local_model": "actor.h5",
+            "local_new_data": "new_data.h5",
+            "local_training_params": "train_params.json",
+            "password": "Y#Imaany4$GolK",
+            "port": 22,
+            "remote_data": "data/data.h5",
+            "remote_data_root": "/home/cscheiderer/CENSE/training_data/",
+            "remote_gpu_config": "gpu_config.json",
+            "remote_model": "model/actor.h5",
+            "remote_new_data": "data/new_data/new_data.h5",
+            "remote_script_reset": "reset.py",
+            "remote_script_train": "train_ac.py",
+            "remote_signal_alive": "training_data/alive_signal_",
+            "remote_signal_train": "training_data/training_signal_",
+            "remote_training_params": "train_params.json",
+            "user": "cscheiderer"
+        },
+        "target_update_rate": 0.001,
+        "trainings_before_param_update": 1,
+        "trainings_until_end_config": 1
+    }
+}

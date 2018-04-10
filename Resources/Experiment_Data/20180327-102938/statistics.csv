@@ -1,0 +1,3 @@
+run_number,steps,rewards,exploration_probability,advancing_steps,advancing_rewards,testing_steps,testing_rewards,successful_network_update
+1,1,-0.650970669992,0.5,,,60,14.4258354187,1
+2,1,-0.641726854917,0.499542064467145,,,,,0
