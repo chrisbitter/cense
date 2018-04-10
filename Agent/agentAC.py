@@ -103,7 +103,7 @@ class AgentActorCritic(pg.QtCore.QThread):
             self.trainer.reset()
             self.trainer.send_model_to_gpu()
 
-        self.visualizer = Visualizer()
+        self.visualizer = Visualizer(self.graph)
 
     def run(self):
         if self.running_mode == RunningMode.TRAIN:
