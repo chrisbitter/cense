@@ -10,7 +10,7 @@
     "runs_before_testing_from_start": 50,
     "min_steps_before_model_save": 30,
     "continue_after_success": 1,
-    "data_storage": "C:\\Users\\Cense\\PycharmProjects\\Cense\\Resources\\Experiment_Data\\"
+    "data_storage": "Results/Logs"
   },
   "trainer": {
     "epochs_start": 1,
@@ -25,25 +25,22 @@
       "host": "137.226.188.42",
       "port": 22,
       "user": "cscheiderer",
-      "password": "Y#Imaany4$GolK",
+      "password": "universalrobot5",
 
-      "local_data_root": "C:\\Users\\Cense\\PycharmProjects\\Cense\\Resources\\nn-data\\",
-      "local_new_data": "new_data.h5",
+      "local_data_root": "Resources/nn-data",
+      "local_data": "data.h5",
       "local_model": "actor.h5",
       "local_training_params": "train_params.json",
-      "local_gpu_config": "gpu_config.json",
 
-      "remote_data_root": "/home/cscheiderer/CENSE/",
-      "remote_new_data": "training_data/data/new_data/new_data.h5",
-      "remote_data": "training_data/data/data.h5",
-      "remote_model": "training_data/model/actor.h5",
-      "remote_training_params": "training_data/train_params.json",
-      "remote_gpu_config": "training_data/gpu_config.json",
+      "remote_data_root": "/home/cscheiderer/CENSE_new",
+      "remote_data": "data/data.h5",
+      "remote_model": "model/actor.h5",
+      "remote_training_params": "train_params.json",
 
-      "remote_signal_train": "training_data/training_signal_",
-      "remote_signal_alive": "training_data/alive_signal_",
+      "remote_signal_train": "training_signal_",
+      "remote_signal_alive": "alive_signal_",
 
-      "remote_script_train": "train_ac.py",
+      "remote_script_train": "train.py",
       "remote_script_reset": "reset.py"
     }
   },

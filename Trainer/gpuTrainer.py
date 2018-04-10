@@ -1,7 +1,7 @@
 # paramiko.util.log_to_file('/tmp/paramiko.log')
 import json
 import logging
-import os
+import os.path as path
 
 import h5py
 import paramiko
@@ -36,16 +36,6 @@ class GpuTrainer(object):
 
         gpu_settings = trainer_config["gpu_settings"]
 
-        self.gpu_config = {
-            "root_folder": gpu_settings["remote_data_root"],
-            "actor_model": gpu_settings["remote_model"],
-            "critic_model": gpu_settings["remote_model"].rsplit("/",1)[0] + "/critic.h5",
-            "actor_target_model": gpu_settings["remote_model"].rsplit("/",1)[0] + "/actor_target.h5",
-            "critic_target_model": gpu_settings["remote_model"].rsplit("/",1)[0] + "/critic_target.h5",
-            "new_data_folder": gpu_settings["remote_new_data"],
-            "data_file": gpu_settings["remote_data"]
-        }
-
         # Open a transport
         self.host = gpu_settings["host"]
         self.port = gpu_settings["port"]
@@ -55,20 +45,23 @@ class GpuTrainer(object):
 
         self.id = time.strftime('%Y%m%d-%H%M%S')
 
-        self.local_new_data = gpu_settings["local_data_root"] + gpu_settings["local_new_data"]
+        local_data_location = path.abspath(path.join(project_root, gpu_settings["local_data_root"]))
+        
+        self.local_new_data =  + gpu_settings["local_new_data"]
         self.local_model = gpu_settings["local_data_root"] + gpu_settings["local_model"]
         self.local_training_params = gpu_settings["local_data_root"] + gpu_settings["local_training_params"]
-        self.local_gpu_config = gpu_settings["local_data_root"] + gpu_settings["local_gpu_config"]
 
-        self.remote_new_data = gpu_settings["remote_data_root"] + gpu_settings["remote_new_data"]
-        self.remote_model = gpu_settings["remote_data_root"] + gpu_settings["remote_model"]
-        self.remote_training_params = gpu_settings["remote_data_root"] + gpu_settings["remote_training_params"]
+        gpu_root = gpu_settings["remote_data_root"]
 
-        self.remote_script_train = gpu_settings["remote_data_root"] + gpu_settings["remote_script_train"]
-        self.remote_script_reset = gpu_settings["remote_data_root"] + gpu_settings["remote_script_reset"]
+        self.remote_new_data = gpu_root + gpu_settings["remote_new_data"]
+        self.remote_model = gpu_root + gpu_settings["remote_model"]
+        self.remote_training_params = gpu_root + gpu_settings["remote_training_params"]
 
-        self.remote_signal_train = gpu_settings["remote_data_root"] + gpu_settings["remote_signal_train"] + self.id
-        self.remote_signal_alive = gpu_settings["remote_data_root"] + gpu_settings["remote_signal_alive"] + self.id
+        self.remote_script_train = gpu_root + gpu_settings["remote_script_train"]
+        self.remote_script_reset = gpu_root + gpu_settings["remote_script_reset"]
+
+        self.remote_signal_train = gpu_root + gpu_settings["remote_signal_train"] + self.id
+        self.remote_signal_alive = gpu_root + gpu_settings["remote_signal_alive"] + self.id
 
     def get_ssh_channel(self):
         ssh = paramiko.SSHClient()
@@ -122,13 +115,9 @@ class GpuTrainer(object):
                     (self.batch_size_end - self.batch_size_start) // self.trainings_until_end_config
                 config_changed = True
 
-        # if self.training_number == self.trainings_without_target + 1:
-        #     self.current_gpu_config["use_target"] = 1
-        #     config_changed = True
-
         # Send experience & configuration to GPU
 
-        if os.path.isfile(self.local_new_data):
+        if path.isfile(self.local_new_data):
             os.remove(self.local_new_data)
 
         # pack data into hdf file (overwrites existing data!)
@@ -223,8 +212,6 @@ class GpuTrainer(object):
         # upload initial config
         with open(self.local_training_params, 'w') as f:
             json.dump(self.current_train_params, f, sort_keys=True, indent=4)
-        with open(self.local_gpu_config, 'w') as f:
-            json.dump(self.gpu_config, f, sort_keys=True, indent=4)
 
         sftp.put(self.local_training_params, self.remote_training_params)
         transport.close()

@@ -16,12 +16,7 @@ import types
 
 from threading import Thread
 import sys
-
-
-class Mode:
-    DQN = 0
-    AC = 1
-    DUMMY = -1
+import os
 
 
 class RunningMode:
@@ -30,118 +25,49 @@ class RunningMode:
 
 
 class CockpitWindow(QtWidgets.QMainWindow):
-    def __init__(self, mode=None, running_mode=None, parent=None):
+    def __init__(self, running_mode=None, parent=None):
         super(CockpitWindow, self).__init__(parent)
 
         view = QtWidgets.QWidget()
         self.setCentralWidget(view)
         self.show()
 
-        self.mode = mode
         self.running_mode = running_mode
-
-        if self.mode == Mode.DQN:
-            parameter_file = "C:\\Users\\Christian\\Thesis\\workspace\\CENSE\\demonstrator_RLAlgorithm\\Resources\\train_parameters_dqn.json"
-        elif self.mode == Mode.AC:
-            parameter_file = "C:\\Users\\Cense\\PycharmProjects\\Cense\\Resources\\train_parameters_ac.json"
-        elif self.mode == Mode.DUMMY:
-            pass
-        else:
-            raise IOError("Unknown Mode")
 
         self.resize(1500, 800)
 
-        title = "CENSE Demonstrator: "
+        title = "CENSE - Cognitive Enhanced Self-Optimization"
 
-        if self.mode == Mode.DQN:
-            title += "DQN"
+        self.action_plot = pg.BarGraphItem(x=range(6), height=np.zeros(6), width=1, brush='b')
 
-            # DQN-specific plots
+        action_names = ['\u21a5', '\u21a4', '\u21b6', '\u21a5', '\u21a4', '\u21b6']
+        xdict = dict(enumerate(action_names))
 
-            # Q-Value Plot
-            self.action_plot = pg.BarGraphItem(x=range(5), height=np.zeros(5), width=1, brush='b')
+        font = QtGui.QFont()
+        font.setPixelSize(40)
+        stringaxis = pg.AxisItem(orientation='bottom')
+        stringaxis.setTicks([xdict.items()])
 
-            action_names = ['rotL', 'L', 'FW', 'R', 'rotR']
-            xdict = dict(enumerate(action_names))
+        stringaxis.setStyle(tickTextOffset=10)
+        stringaxis.tickFont = font
+        stringaxis.setHeight(60)
 
-            stringaxis = pg.AxisItem(orientation='bottom')
-            stringaxis.setTicks([xdict.items()])
+        stringaxis.setLabel("Prediction | Execution")
 
-            action_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
+        action_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
 
-            action_plot_item = action_widget.getPlotItem()
-            action_plot_item.enableAutoRange()
-            action_plot_item.addItem(self.action_plot)
-            action_plot_item.setTitle("Q-Values")
+        action_plot_item = action_widget.getPlotItem()
+        action_plot_item.enableAutoRange()
+        action_plot_item.addItem(self.action_plot)
+        action_plot_item.setTitle("Actions")
 
-            from Agent.agentDQN import DeepQNetworkAgent as Agent
+        action_plot_item.setYRange(-1, 1)
 
-        elif self.mode == Mode.AC:
-            title += "AC"
+        from Agent.agentAC import AgentActorCritic as Agent
 
-            # AC-specific plots
+        project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
-            self.action_plot = pg.BarGraphItem(x=range(6), height=np.zeros(6), width=1, brush='b')
-
-            action_names = ['\u21a5', '\u21a4', '\u21b6','\u21a5', '\u21a4', '\u21b6']
-            xdict = dict(enumerate(action_names))
-
-            font = QtGui.QFont()
-            font.setPixelSize(40)
-            stringaxis = pg.AxisItem(orientation='bottom')
-            stringaxis.setTicks([xdict.items()])
-
-            stringaxis.setStyle(tickTextOffset=10)
-            stringaxis.tickFont = font
-            stringaxis.setHeight(60)
-
-            stringaxis.setLabel("Prediction | Execution")
-
-            action_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
-
-            action_plot_item = action_widget.getPlotItem()
-            action_plot_item.enableAutoRange()
-            action_plot_item.addItem(self.action_plot)
-            action_plot_item.setTitle("Actions")
-
-            action_plot_item.setYRange(-1, 1)
-
-            from Agent.agentAC import AgentActorCritic as Agent
-            
-        elif self.mode == Mode.DUMMY:
-            title += "Dummy"
-
-            # AC-specific plots
-
-            self.action_plot = pg.BarGraphItem(x=range(6), height=np.zeros(6), width=1, brush='b')
-
-            action_names = ['\u21a5', '\u21a4', '\u21b6','\u21a5', '\u21a4', '\u21b6']
-            xdict = dict(enumerate(action_names))
-
-            font = QtGui.QFont()
-            font.setPixelSize(40)
-            stringaxis = pg.AxisItem(orientation='bottom')
-            stringaxis.setTicks([xdict.items()])
-
-            stringaxis.setStyle(tickTextOffset=10)
-            stringaxis.tickFont = font
-            stringaxis.setHeight(60)
-
-            stringaxis.setLabel("Prediction | Execution")
-
-            action_widget = pg.PlotWidget(axisItems={'bottom': stringaxis})
-
-            action_plot_item = action_widget.getPlotItem()
-            action_plot_item.enableAutoRange()
-            action_plot_item.addItem(self.action_plot)
-            action_plot_item.setTitle("Actions")
-
-            action_plot_item.setYRange(-1, 1)
-            Agent = DummyAgent
-        else:
-            raise IOError("Unknown mode!")
-
-        self.agent = Agent(parameter_file, self.running_mode)
+        self.agent = Agent(project_root, self.running_mode)
 
         self.setWindowTitle(title)
 
@@ -191,9 +117,9 @@ class CockpitWindow(QtWidgets.QMainWindow):
         layout = QtWidgets.QGridLayout()
         view.setLayout(layout)
 
-        #layout.addWidget(steps_widget, 1, 1)
+        # layout.addWidget(steps_widget, 1, 1)
         layout.addWidget(state_plot_widget, 1, 1)
-        #layout.addWidget(exploration_widget, 1, 3)
+        # layout.addWidget(exploration_widget, 1, 3)
         layout.addWidget(test_steps_widget, 2, 1)
         layout.addWidget(action_widget, 1, 2)
         layout.addWidget(self.text_widget, 2, 2)
@@ -219,8 +145,8 @@ class CockpitWindow(QtWidgets.QMainWindow):
 
         self.toolbar = self.addToolBar('Toolbar')
         self.toolbar.addAction(self.statusAction)
-        #self.toolbar.addAction(self.boostExploration)
-        #self.toolbar.addAction(self.modeAction)
+        # self.toolbar.addAction(self.boostExploration)
+        # self.toolbar.addAction(self.modeAction)
 
         # self.setLayout(layout)
 
@@ -252,24 +178,13 @@ class CockpitWindow(QtWidgets.QMainWindow):
     def update_actions(self, data):
         # draw q_values except value corresponding to action
 
-        if self.mode == Mode.DQN:
-            colors = ['b'] * 5
-            heights = data[0]
+        colors = ['b'] * 3 + ['g'] * 3
+        heights = []
 
-            if heights[data[1]] == np.amax(heights):
-                colors[data[1]] = 'g'
-            else:
-                colors[data[1]] = 'r'
-
-        elif self.mode == Mode.AC or self.mode == Mode.DUMMY:
-            colors = ['b'] * 3 + ['g'] * 3
-            heights = []
-
-            for i in range(3):
-                heights.append(data[0][i])
-            for i in range(3):
-                heights.append(data[1][i])
-
+        for i in range(3):
+            heights.append(data[0][i])
+        for i in range(3):
+            heights.append(data[1][i])
 
         self.action_plot.setOpts(height=heights, brushes=colors)
 
@@ -296,63 +211,20 @@ class CockpitWindow(QtWidgets.QMainWindow):
         print(status)
 
 
-class DummyAgent(pg.QtCore.QThread):
-    status_signal = pyqtSignal(object)
-    steps_signal = pyqtSignal(object)
-    state_signal = pyqtSignal(object)
-    exploration_signal = pyqtSignal(object)
-    test_steps_signal = pyqtSignal(object)
-    actions_signal = pyqtSignal(object)
-
-    def __init__(self, parameter_file, _):
-        super(DummyAgent, self).__init__()
-
-    def run(self):
-        for _ in range(100):
-            i = np.random.randint(6)
-
-            self.actions_signal.emit([np.random.rand(3).astype(np.float64), np.random.rand(3).astype(np.float64)])
-
-            # if i == 0:
-            #     self.status_signal.emit(str(_))
-            # elif i == 1:
-            #     self.steps_signal.emit([_, np.random.random()])
-            # elif i == 2:
-            #     self.state_signal.emit(np.random.random((10, 10)))
-            # elif i == 3:
-            #     self.exploration_signal.emit([_, np.random.random()])
-            # elif i == 4:
-            #     self.test_steps_signal.emit([_, np.random.random()])
-            # else:
-            #     self.actions_signal.emit(np.random.random((2, 6)))
-            # time.sleep(.2)
-
-    def boost_exploration(self):
-        print("boost")
-
-    def start_training(self):
-        print("start")
-
-    def stop_training(self):
-        print("stop")
-
-
 class WindowRunningMode(QtWidgets.QWidget):
-    def __init__(self, mode=None, parent=None):
+    def __init__(self, parent=None):
         super(WindowRunningMode, self).__init__(parent)
-
-        self.mode = mode
 
         self.description = QtWidgets.QLabel(self)
         self.description.setText("Choose Mode")
 
         self.pushButtonTRAIN = QtWidgets.QPushButton(self)
         self.pushButtonTRAIN.setText("Train")
-        self.pushButtonTRAIN.clicked.connect(self.on_pushButtonTRAIN_clicked)
+        self.pushButtonTRAIN.clicked.connect(self.choose_train)
 
         self.pushButtonPLAY = QtWidgets.QPushButton(self)
         self.pushButtonPLAY.setText("Play")
-        self.pushButtonPLAY.clicked.connect(self.on_pushButtonPLAY_clicked)
+        self.pushButtonPLAY.clicked.connect(self.choose_play)
 
         self.layout = QtWidgets.QVBoxLayout(self)
         self.layout.addWidget(self.description)
@@ -360,82 +232,23 @@ class WindowRunningMode(QtWidgets.QWidget):
         self.layout.addWidget(self.pushButtonPLAY)
 
     @QtCore.pyqtSlot()
-    def on_pushButtonTRAIN_clicked(self):
+    def choose_train(self):
         self.close()
-        self.cockpitWindow = CockpitWindow(self.mode, RunningMode.TRAIN)
+        self.cockpitWindow = CockpitWindow(RunningMode.TRAIN)
         self.cockpitWindow.show()
 
     @QtCore.pyqtSlot()
-    def on_pushButtonPLAY_clicked(self):
+    def choose_play(self):
         self.close()
-        self.cockpitWindow = CockpitWindow(self.mode, RunningMode.PLAY)
+        self.cockpitWindow = CockpitWindow(RunningMode.PLAY)
         self.cockpitWindow.show()
-
-    @QtCore.pyqtSlot()
-    def on_pushButtonDummy_clicked(self):
-        self.close()
-        self.parameterWindow = CockpitWindow(Mode.DUMMY)
-        self.parameterWindow.show()
-
-
-class WindowMode(QtWidgets.QWidget):
-    def __init__(self, parent=None):
-        super(WindowMode, self).__init__(parent)
-
-        self.description = QtWidgets.QLabel(self)
-        self.description.setText("Choose Learning Paradigm")
-
-        self.pushButtonDQN = QtWidgets.QPushButton(self)
-        self.pushButtonDQN.setText("Deep Q-Learning")
-        self.pushButtonDQN.clicked.connect(self.on_pushButtonDQN_clicked)
-
-        self.pushButtonAC = QtWidgets.QPushButton(self)
-        self.pushButtonAC.setText("Actor Critic")
-        self.pushButtonAC.clicked.connect(self.on_pushButtonAC_clicked)
-
-        self.pushButtonDummy = QtWidgets.QPushButton(self)
-        self.pushButtonDummy.setText("Dummy")
-        self.pushButtonDummy.clicked.connect(self.on_pushButtonDummy_clicked)
-
-        self.layout = QtWidgets.QVBoxLayout(self)
-        self.layout.addWidget(self.description)
-        self.layout.addWidget(self.pushButtonDQN)
-        self.layout.addWidget(self.pushButtonAC)
-        self.layout.addWidget(self.pushButtonDummy)
-
-    @QtCore.pyqtSlot()
-    def on_pushButtonDQN_clicked(self):
-        self.close()
-        self.runningModeWindow = WindowRunningMode(Mode.DQN)
-        self.runningModeWindow.show()
-
-    @QtCore.pyqtSlot()
-    def on_pushButtonAC_clicked(self):
-        self.close()
-        self.runningModeWindow = WindowRunningMode(Mode.AC)
-        self.runningModeWindow.show()
-
-    @QtCore.pyqtSlot()
-    def on_pushButtonDummy_clicked(self):
-        self.close()
-        self.runningModeWindow = WindowRunningMode(Mode.DUMMY)
-        self.runningModeWindow.show()
 
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("CENSE-Demonstrator")
 
-    # window_cockpit = CockpitWindow(Mode.AC, RunningMode.TRAIN)
-    # window_cockpit.show()
-
-    window_running_mode = WindowRunningMode(Mode.AC)
+    window_running_mode = WindowRunningMode()
     window_running_mode.show()
 
-    # window_mode = WindowMode()
-    # window_mode.show()
-
     sys.exit(app.exec_())
-    #
-    # # interface = Interface('dqn')
-    # interface = Interface(Mode.DQN)
