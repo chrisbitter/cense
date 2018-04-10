@@ -66,8 +66,8 @@ class Visualizer:
         return actor_layer_outs, critic_layer_outs
 
     def generate_element_weights_vektor(self):
-        self.lock.acquire()
-        try:
+
+        if self.lock.acquire(False):
             actor_layer_outs, critic_layer_outs = self.testing_functor()
             layer_counter = 0
             for alayer in actor_layer_outs:
@@ -103,11 +103,11 @@ class Visualizer:
             #             clayer[0][j] = np.asscalar(clayer[0][j])
             #             self.element_weights_vektor.append(clayer[0][j])
             #             # print(layer[0][j])
-        finally:
+
             self.lock.release()
 
-        print(self.element_weights_vektor)
-        return
+            print(self.element_weights_vektor)
+
 
     def visualize(self, model, state):
         self.actor_model = model
@@ -123,7 +123,8 @@ if __name__ == "__main__":
     actor_model, critic_model = visualizer.load_models()
     im = cv.imread('cense_input_raw.png', cv.IMREAD_COLOR)
     resize_im = cv.resize(im, (40, 40))
-    visualizer.visualize(actor_model, resize_im)
+    for i in range(10):
+        visualizer.visualize(actor_model, resize_im)
 
     # soll = 40 * 40 * 3 + 36 * 36 * 30 + 18 * 18 * 30 + 14 * 14 * 15 + 7 * 7 * 15 + 5 * 5 * 10 + 250 + 250 + 400 + 400 + 200 + 200 + 100 + 100 + 1 + 1 + 1 + 3
     image = []
