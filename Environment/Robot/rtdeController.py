@@ -57,7 +57,7 @@ class RtdeController(object):
     # CONSTRAINT_MIN = np.array([-.21, -.54, -.2])
     # CONSTRAINT_MAX = np.array([.28, -.3, .7])
 
-    CONSTRAINT_MIN = np.array([-.26 , -.41, .07])
+    CONSTRAINT_MIN = np.array([-.26 , -.41, .08])
     CONSTRAINT_MAX = np.array([.30, -.26, 0.68])
 
     SPEED_FRACTION = 1
