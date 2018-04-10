@@ -2,6 +2,7 @@
 import json
 import logging
 import os.path as path
+import os
 
 import h5py
 import paramiko
@@ -16,7 +17,7 @@ class GpuTrainer(object):
 
     training_number = 0
 
-    def __init__(self, trainer_config):
+    def __init__(self, project_root, trainer_config):
 
         self.epochs_start = trainer_config["epochs_start"]
         self.epochs_end = trainer_config["epochs_end"]
@@ -47,21 +48,21 @@ class GpuTrainer(object):
 
         local_data_location = path.abspath(path.join(project_root, gpu_settings["local_data_root"]))
         
-        self.local_new_data =  + gpu_settings["local_new_data"]
-        self.local_model = gpu_settings["local_data_root"] + gpu_settings["local_model"]
-        self.local_training_params = gpu_settings["local_data_root"] + gpu_settings["local_training_params"]
+        self.local_new_data = path.abspath(path.join(local_data_location, gpu_settings["local_data"]))
+        self.local_model = path.abspath(path.join(local_data_location, gpu_settings["local_model"]))
+        self.local_training_params = path.abspath(path.join(local_data_location, gpu_settings["local_training_params"]))
 
         gpu_root = gpu_settings["remote_data_root"]
 
-        self.remote_new_data = gpu_root + gpu_settings["remote_new_data"]
-        self.remote_model = gpu_root + gpu_settings["remote_model"]
-        self.remote_training_params = gpu_root + gpu_settings["remote_training_params"]
+        self.remote_new_data = path.abspath(path.join(gpu_root, gpu_settings["remote_data"]))
+        self.remote_model = path.abspath(path.join(gpu_root, gpu_settings["remote_model"]))
+        self.remote_training_params = path.abspath(path.join(gpu_root, gpu_settings["remote_training_params"]))
 
-        self.remote_script_train = gpu_root + gpu_settings["remote_script_train"]
-        self.remote_script_reset = gpu_root + gpu_settings["remote_script_reset"]
+        self.remote_script_train = path.abspath(path.join(gpu_root, gpu_settings["remote_script_train"]))
+        self.remote_script_reset = path.abspath(path.join(gpu_root, gpu_settings["remote_script_reset"]))
 
-        self.remote_signal_train = gpu_root + gpu_settings["remote_signal_train"] + self.id
-        self.remote_signal_alive = gpu_root + gpu_settings["remote_signal_alive"] + self.id
+        self.remote_signal_train = path.abspath(path.join(gpu_root, gpu_settings["remote_signal_train"] + self.id))
+        self.remote_signal_alive = path.abspath(path.join(gpu_root, gpu_settings["remote_signal_alive"] + self.id))
 
     def get_ssh_channel(self):
         ssh = paramiko.SSHClient()

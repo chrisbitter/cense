@@ -16,6 +16,8 @@ from Interface.interface import RunningMode
 from Trainer.gpuTrainer import GpuTrainer as Trainer
 
 import logging
+import os.path as path
+
 from ControllerVisualisierung.controllerVisualisierung import Visualizer
 
 # silence tf compile warnings
@@ -71,8 +73,8 @@ class AgentActorCritic(pg.QtCore.QThread):
 
         self.world = World(config["environment"])
 
-        self.model_file = config["trainer"]["gpu_settings"]["local_data_root"] + \
-                          config["trainer"]["gpu_settings"]["local_model"]
+        self.model_file = path.abspath(path.join(*[project_root, config["trainer"]["gpu_settings"]["local_data_root"],
+                          config["trainer"]["gpu_settings"]["local_model"]]))
 
         # create directory to store everything (statistics, NN-data, etc.)
         self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
@@ -97,7 +99,7 @@ class AgentActorCritic(pg.QtCore.QThread):
 
         self.graph = tf.get_default_graph()
 
-        self.trainer = Trainer(config["trainer"])
+        self.trainer = Trainer(project_root, config["trainer"])
 
         if not collector_config["resume_training"]:
             self.trainer.reset()

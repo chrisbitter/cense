@@ -1,7 +1,5 @@
-import nnFactory as nnF
 from keras import backend as K
 import numpy as np
-import cv2 as cv
 import threading
 import tensorflow as tf
 # from matplotlib import pyplot as plt
@@ -39,11 +37,14 @@ class Visualizer:
         self.critic_model = None
         self.state = None
 
+    '''
+    
     def load_models(self):
         actor_model = nnF.actor_network(self.input_shape)  # input_size = (40, 40, 3)
         critic_model = nnF.critic_network(self.input_shape)  # input_size = (40, 40, 3)
         actor_model.load_weights('actor.h5')
         return actor_model, critic_model
+    '''
 
     def prepare_theano_functions(self):
         with self.graph.as_default():
@@ -118,6 +119,8 @@ class Visualizer:
 
 
 if __name__ == "__main__":
+    pass
+    '''
     graph = tf.get_default_graph()
     visualizer = Visualizer(graph)
     actor_model, critic_model = visualizer.load_models()
@@ -138,3 +141,4 @@ if __name__ == "__main__":
     print(len(visualizer.element_weights_vektor))
     # print(visualizer.element_weights_vektor)
 
+    '''
