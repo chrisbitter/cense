@@ -1,14 +1,18 @@
 import h5py
 import matplotlib.pyplot as plt
+import os
 
+path_to_data = os.path.abspath(os.path.join(os.getcwd(), "../nn-data/new_data.h5"))
 
-file = "C:/Users/Christian/Thesis/workspace/CENSE/demonstrator_RLAlgorithm/Resources/nn-data/data.h5"
-
-with h5py.File(file, 'r') as f:
+with h5py.File(path_to_data, 'r') as f:
     states = f['states'][:]
+
+print(len(states))
 
 for i in range(len(states)):
     state = states[i]
+
+    state = (state + 1) / 2
 
     plt.figure()
     plt.imshow(state, vmin=0, vmax=1)

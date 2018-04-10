@@ -38,13 +38,15 @@ class AgentActorCritic(pg.QtCore.QThread):
     test_steps_signal = pyqtSignal(object)
     actions_signal = pyqtSignal(object)
 
-    def __init__(self, parameter_file, running_mode):
+    def __init__(self, project_root, running_mode):
         super(AgentActorCritic, self).__init__()
 
         self.running_mode = running_mode
 
+        parameter_file_path = os.path.abspath(os.path.join(project_root, "Resources/parameters.json"))
+
         # read configuration parameters
-        with open(parameter_file) as json_data:
+        with open(parameter_file_path) as json_data:
             config = json.load(json_data)
 
         collector_config = config["collector"]
@@ -59,7 +61,8 @@ class AgentActorCritic(pg.QtCore.QThread):
         self.runs_before_testing_from_start = collector_config["runs_before_testing_from_start"]
         self.min_steps_before_model_save = collector_config["min_steps_before_model_save"]
         self.continue_after_success = collector_config["continue_after_success"]
-        self.data_storage = collector_config["data_storage"]
+        self.data_storage = os.path.abspath(os.path.join(project_root, collector_config["data_storage"]))
+
         self.exploration_probability = self.exploration_probability_start
 
         self.exploration_update_factor = (self.exploration_probability_end / self.exploration_probability_start) ** (
