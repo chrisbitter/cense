@@ -33,13 +33,14 @@ class simulationEnvironment(object):
 
         while True:
 
+            while vrep.simxSetObjectOrientation(self.clientID, self.targetHandle, -1, orientation,
+                                                vrep.simx_opmode_blocking) != 0:
+                pass
+
             while vrep.simxSetObjectPosition(self.clientID, self.targetHandle, -1, position,
                                              vrep.simx_opmode_blocking) != 0:
                 pass
 
-            while vrep.simxSetObjectOrientation(self.clientID, self.targetHandle, -1, orientation,
-                                                vrep.simx_opmode_blocking) != 0:
-                pass
 
             current_tip_position, current_tip_orientation = self.get_pose()
             current_target_position, current_target_orientation = self.get_target_pose()
@@ -88,7 +89,7 @@ class simulationEnvironment(object):
         new_position = current_position.copy()
         new_orientation = current_orientation.copy()
 
-        print(current_orientation)
+        print(current_orientation[1])
 
         new_position[0] -= action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(current_orientation[1]) \
                            - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(current_orientation[1])
@@ -97,7 +98,7 @@ class simulationEnvironment(object):
 
         new_orientation[1] += action[2] * self.ROTATION_MAX_ANGLE
 
-        print(new_orientation)
+        print(new_orientation[1])
 
         self.move_to_pose(new_position, new_orientation)
 
