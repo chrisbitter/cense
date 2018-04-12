@@ -1,6 +1,7 @@
 from keras import backend as K
 import numpy as np
 import threading
+import socket
 import tensorflow as tf
 # from matplotlib import pyplot as plt
 
@@ -27,6 +28,25 @@ To generate example element_weights_vektor the method to import is generate_elem
 '''
 
 
+class VisSocket:
+    def __init__(self):
+        self.TCP_IP = '127.0.0.1'
+        self.TCP_PORT = 5005
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def connect(self):
+        self.sock.connect((self.TCP_IP, self.TCP_PORT))
+
+    def send_package(self, package):
+        total_sent = 0
+        package_str = "{}".format(package)
+        while total_sent < len(package_str):
+            sent = self.sock.send(package_str[total_sent:])
+            if sent == 0:
+                raise RuntimeError("socket connection broken")
+            total_sent = total_sent + sent
+
+
 class Visualizer:
     def __init__(self, tf_graph):
         self.graph = tf_graph
@@ -36,6 +56,8 @@ class Visualizer:
         self.actor_model = None
         self.critic_model = None
         self.state = None
+        self.vis_socket = VisSocket()
+        self.comm_tries = 10
 
     '''
     
@@ -66,8 +88,16 @@ class Visualizer:
         critic_layer_outs = None
         return actor_layer_outs, critic_layer_outs
 
-    def generate_element_weights_vektor(self):
+    def send_vector(self):
+        for i in range(self.comm_tries):
+            self.vis_socket.connect()
+            try:
+                self.vis_socket.send_package(self.element_weights_vektor)
+                break
+            except RuntimeError:
+                print("VECTOR COULD NOT BE SENT! TRY:{}".format(i))
 
+    def generate_element_weights_vektor(self):
         if self.lock.acquire(False):
             actor_layer_outs, critic_layer_outs = self.testing_functor()
             layer_counter = 0
@@ -105,14 +135,14 @@ class Visualizer:
             #             self.element_weights_vektor.append(clayer[0][j])
             #             # print(layer[0][j])
 
+            self.send_vector()
+
             self.lock.release()
 
-            print(self.element_weights_vektor)
-
-
-    def visualize(self, model, state):
+    def visualize(self, model, state, graph):
         self.actor_model = model
         self.state = state
+        self.graph = graph
         t = threading.Thread(target=self.generate_element_weights_vektor, name='vector_generator')
         t.start()
         # t.join()  # just for testing

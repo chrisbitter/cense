@@ -365,7 +365,7 @@ class AgentActorCritic(pg.QtCore.QThread):
 
             state = self.world.observe_state()
 
-            self.visualizer.visualize(self.model, state)
+            self.visualizer.visualize(self.model, state, self.graph)
 
             self.state_signal.emit(state)
 
