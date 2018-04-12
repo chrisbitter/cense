@@ -11,6 +11,7 @@ class simulationEnvironment(object):
         self.TRANSLATION_FORWARD_MAX_DISTANCE = .03
         self.ERROR_TRANSLATION = .001
         self.ERROR_ROTATION = 1 * np.pi / 180
+        self.START_POSITION = [.2, -.6, 1.07]
 
         vrep.simxFinish(-1)  # just in case, close all opened connections
 
@@ -21,6 +22,11 @@ class simulationEnvironment(object):
             _, self.tipHandle = vrep.simxGetObjectHandle(self.clientID, 'UR5_tip', vrep.simx_opmode_blocking)
 
             vrep.simxStartSimulation(self.clientID, vrep.simx_opmode_blocking)
+
+            current_position, current_orientation = self.get_target_pose()
+
+            self.current_position = self.START_POSITION
+            self.current_orientation = 0
 
     def __del__(self):
         vrep.simxStopSimulation(self.clientID, vrep.simx_opmode_blocking)
@@ -83,29 +89,28 @@ class simulationEnvironment(object):
         return np.array(position), np.array(orientation)
 
     def execute(self, action):
+        print('entzer')
+        
+        #print(current_position)
 
-        current_position, current_orientation = self.get_target_pose()
+        self.current_position[0] -= action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(self.current_orientation) \
+                           - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(self.current_orientation)
+        self.current_position[2] += action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.sin(self.current_orientation) \
+                           + action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.cos(self.current_orientation)
 
-        new_position = current_position.copy()
-        new_orientation = current_orientation.copy()
+        self.current_orientation += action[2] * self.ROTATION_MAX_ANGLE
+        self.current_orientation = self.current_orientation % (2*np.pi)
 
-        print(current_orientation[1])
+        new_orientation = [-np.pi, self.current_orientation, np.pi]
 
-        new_position[0] -= action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(current_orientation[1]) \
-                           - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(current_orientation[1])
-        new_position[2] += action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.sin(current_orientation[1]) \
-                           + action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.cos(current_orientation[1])
-
-        new_orientation[1] += action[2] * self.ROTATION_MAX_ANGLE
-
-        print(new_orientation[1])
-
-        self.move_to_pose(new_position, new_orientation)
+        #print(new_position[1])
+        self.move_to_pose(self.current_position, new_orientation)
 
 
 if __name__ == "__main__":
 
     env = simulationEnvironment()
 
-    for tt in range(1000):
-        env.execute([0, 0, .5])
+
+    for tt in range(10):
+        env.execute([0, 1, 0])
