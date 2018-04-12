@@ -1140,7 +1140,9 @@ def simxSetModelProperty(clientID, objectHandle, prop, operationMode):
 
     return c_SetModelProperty(clientID, objectHandle, prop, operationMode)
 
-def simxStart(connectionAddress, connectionPort, waitUntilConnected, doNotReconnectOnceDisconnected, timeOutInMs, commThreadCycleInMs):
+def simxStart(connectionAddress: object, connectionPort: object, waitUntilConnected: object, doNotReconnectOnceDisconnected: object,
+              timeOutInMs: object,
+              commThreadCycleInMs: object) -> object:
     '''
     Please have a look at the function description/documentation in the V-REP user manual
     '''
