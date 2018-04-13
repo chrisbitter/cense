@@ -58,6 +58,13 @@ class simulationEnvironment(object):
             if translation_deviation < self.ERROR_TRANSLATION and rotation_deviation < self.ERROR_ROTATION:
                 break
 
+            returnCode , collisionhandle = vrep.simxGetCollisionHandle(self.clientID, 'Collision',vrep.simx_opmode_blocking)
+           # print( returnCode )
+            #print(collisionhandle)
+            print(vrep.simxReadCollision(self.clientID, collisionhandle, vrep.simx_opmode_blocking))
+            #TODO return colision state, fix collison in the v-rep file
+            #print('\n\n')
+
     def get_pose(self):
         while True:
             returnCode, position = vrep.simxGetObjectPosition(self.clientID, self.tipHandle, -1,
@@ -89,9 +96,9 @@ class simulationEnvironment(object):
         return np.array(position), np.array(orientation)
 
     def execute(self, action):
-        print('entzer')
-        
-        #print(current_position)
+        #print('entzer')
+
+        #print(self.current_position)
 
         self.current_position[0] -= action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(self.current_orientation) \
                            - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(self.current_orientation)
@@ -103,14 +110,12 @@ class simulationEnvironment(object):
 
         new_orientation = [-np.pi, self.current_orientation, np.pi]
 
-        #print(new_position[1])
+        #print(new_orientation[1])
         self.move_to_pose(self.current_position, new_orientation)
-
 
 if __name__ == "__main__":
 
     env = simulationEnvironment()
 
-
-    for tt in range(10):
-        env.execute([0, 1, 0])
+    for tt in range(1000):
+        env.execute([0, -0.1, 0.5])
