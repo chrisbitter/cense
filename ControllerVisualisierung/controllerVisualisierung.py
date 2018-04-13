@@ -3,6 +3,7 @@ import numpy as np
 import threading
 import socket
 import tensorflow as tf
+import sys
 # from matplotlib import pyplot as plt
 
 '''
@@ -30,22 +31,20 @@ To generate example element_weights_vektor the method to import is generate_elem
 
 class VisSocket:
     def __init__(self):
-        self.TCP_IP = '127.0.0.1'
-        self.TCP_PORT = 5005
+        self.TCP_IP = '137.226.189.211'
+        self.TCP_PORT = 59595
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def connect(self):
         self.sock.connect((self.TCP_IP, self.TCP_PORT))
 
     def send_package(self, package):
-        total_sent = 0
-        package_str = "{}".format(package)
-        while total_sent < len(package_str):
-            sent = self.sock.send(package_str[total_sent:])
-            if sent == 0:
-                raise RuntimeError("socket connection broken")
-            total_sent = total_sent + sent
-
+        # print(len(package))
+        package = np.array(package, dtype="float32")
+        # print('max: {}  min: {}  median: {}'.format(np.amax(package), np.amin(package), np.median(package)))
+        byte_package = package.tobytes()
+        self.sock.send(byte_package)
+        del byte_package
 
 class Visualizer:
     def __init__(self, tf_graph):
@@ -58,6 +57,7 @@ class Visualizer:
         self.state = None
         self.vis_socket = VisSocket()
         self.comm_tries = 10
+        self.vis_socket.connect()
 
     '''
     
@@ -89,53 +89,56 @@ class Visualizer:
         return actor_layer_outs, critic_layer_outs
 
     def send_vector(self):
-        for i in range(self.comm_tries):
-            self.vis_socket.connect()
-            try:
-                self.vis_socket.send_package(self.element_weights_vektor)
-                break
-            except RuntimeError:
-                print("VECTOR COULD NOT BE SENT! TRY:{}".format(i))
+        try:
+            self.vis_socket.send_package(self.element_weights_vektor)
+        except RuntimeError:
+            pass
 
     def generate_element_weights_vektor(self):
-        if self.lock.acquire(False):
-            actor_layer_outs, critic_layer_outs = self.testing_functor()
-            layer_counter = 0
-            for alayer in actor_layer_outs:
-                if not (layer_counter in [6, 7, 9, 11, 13]):
-                    # print(alayer[0].shape)
-                    try:
-                        i_max = len(alayer[0])
-                        j_max = len(alayer[0][0])
-                        k_max = len(alayer[0][0][0])
-                        for k in range(k_max):
-                            for i in range(i_max):
-                                for j in range(j_max):
-                                    self.element_weights_vektor.append(alayer[0][i][j][k].item())
-                    except:
-                        j_max = len(alayer[0])
-                        for j in range(j_max):
-                            self.element_weights_vektor.append(alayer[0][j].item())
-                layer_counter += 1
-            #
-            # for clayer in critic_layer_outs:
-            #     try:
-            #         i_max = len(clayer[0])
-            #         j_max = len(clayer[0][0])
-            #         k_max = len(clayer[0][0][0])
-            #         for k in range(k_max):
-            #             for j in range(j_max):
-            #                 for i in range(i_max):
-            #                     clayer[0][i][j][k] = np.asscalar(clayer[0][i][j][k])
-            #                     self.element_weights_vektor.append(clayer[0][i][j][k])
-            #     except:
-            #         j_max = len(clayer[0])
-            #         for j in range(j_max):
-            #             clayer[0][j] = np.asscalar(clayer[0][j])
-            #             self.element_weights_vektor.append(clayer[0][j])
-            #             # print(layer[0][j])
 
-            self.send_vector()
+        if self.lock.acquire(False):
+            try:
+                self.element_weights_vektor = []
+
+                actor_layer_outs, critic_layer_outs = self.testing_functor()
+                layer_counter = 0
+                for alayer in actor_layer_outs:
+                    if not (layer_counter in [6, 7, 9, 11, 13]):
+                        # print(alayer[0].shape)
+                        try:
+                            i_max = len(alayer[0])
+                            j_max = len(alayer[0][0])
+                            k_max = len(alayer[0][0][0])
+                            for k in range(k_max):
+                                for i in range(i_max):
+                                    for j in range(j_max):
+                                        self.element_weights_vektor.append(alayer[0][i][j][k].item())
+                        except:
+                            j_max = len(alayer[0])
+                            for j in range(j_max):
+                                self.element_weights_vektor.append(alayer[0][j].item())
+                    layer_counter += 1
+                #
+                # for clayer in critic_layer_outs:
+                #     try:
+                #         i_max = len(clayer[0])
+                #         j_max = len(clayer[0][0])
+                #         k_max = len(clayer[0][0][0])
+                #         for k in range(k_max):
+                #             for j in range(j_max):
+                #                 for i in range(i_max):
+                #                     clayer[0][i][j][k] = np.asscalar(clayer[0][i][j][k])
+                #                     self.element_weights_vektor.append(clayer[0][i][j][k])
+                #     except:
+                #         j_max = len(clayer[0])
+                #         for j in range(j_max):
+                #             clayer[0][j] = np.asscalar(clayer[0][j])
+                #             self.element_weights_vektor.append(clayer[0][j])
+                #             # print(layer[0][j])
+
+                self.send_vector()
+            except:
+                pass
 
             self.lock.release()
 
