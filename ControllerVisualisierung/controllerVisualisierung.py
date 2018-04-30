@@ -31,7 +31,7 @@ To generate example element_weights_vektor the method to import is generate_elem
 
 class VisSocket:
     def __init__(self):
-        self.TCP_IP = '137.226.189.211'
+        self.TCP_IP = '192.168.1.40'
         self.TCP_PORT = 59595
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -51,22 +51,13 @@ class Visualizer:
         self.graph = tf_graph
         self.input_shape = (40, 40, 3)
         self.lock = threading.Lock()
-        self.element_weights_vektor = []
+        self.element_weights_vector = []
         self.actor_model = None
         self.critic_model = None
         self.state = None
         self.vis_socket = VisSocket()
         self.comm_tries = 10
         self.vis_socket.connect()
-
-    '''
-    
-    def load_models(self):
-        actor_model = nnF.actor_network(self.input_shape)  # input_size = (40, 40, 3)
-        critic_model = nnF.critic_network(self.input_shape)  # input_size = (40, 40, 3)
-        actor_model.load_weights('actor.h5')
-        return actor_model, critic_model
-    '''
 
     def prepare_theano_functions(self):
         with self.graph.as_default():
@@ -90,21 +81,20 @@ class Visualizer:
 
     def send_vector(self):
         try:
-            self.vis_socket.send_package(self.element_weights_vektor)
+            self.vis_socket.send_package(self.element_weights_vector)
         except RuntimeError:
             pass
 
-    def generate_element_weights_vektor(self):
+    def generate_element_weights_vector(self):
 
         if self.lock.acquire(False):
             try:
-                self.element_weights_vektor = []
+                self.element_weights_vector = []
 
                 actor_layer_outs, critic_layer_outs = self.testing_functor()
                 layer_counter = 0
                 for alayer in actor_layer_outs:
                     if not (layer_counter in [6, 7, 9, 11, 13]):
-                        # print(alayer[0].shape)
                         try:
                             i_max = len(alayer[0])
                             j_max = len(alayer[0][0])
@@ -112,29 +102,12 @@ class Visualizer:
                             for k in range(k_max):
                                 for i in range(i_max):
                                     for j in range(j_max):
-                                        self.element_weights_vektor.append(alayer[0][i][j][k].item())
+                                        self.element_weights_vector.append(alayer[0][i][j][k].item())
                         except:
                             j_max = len(alayer[0])
                             for j in range(j_max):
-                                self.element_weights_vektor.append(alayer[0][j].item())
+                                self.element_weights_vector.append(alayer[0][j].item())
                     layer_counter += 1
-                #
-                # for clayer in critic_layer_outs:
-                #     try:
-                #         i_max = len(clayer[0])
-                #         j_max = len(clayer[0][0])
-                #         k_max = len(clayer[0][0][0])
-                #         for k in range(k_max):
-                #             for j in range(j_max):
-                #                 for i in range(i_max):
-                #                     clayer[0][i][j][k] = np.asscalar(clayer[0][i][j][k])
-                #                     self.element_weights_vektor.append(clayer[0][i][j][k])
-                #     except:
-                #         j_max = len(clayer[0])
-                #         for j in range(j_max):
-                #             clayer[0][j] = np.asscalar(clayer[0][j])
-                #             self.element_weights_vektor.append(clayer[0][j])
-                #             # print(layer[0][j])
 
                 self.send_vector()
             except:
@@ -146,7 +119,7 @@ class Visualizer:
         self.actor_model = model
         self.state = state
         self.graph = graph
-        t = threading.Thread(target=self.generate_element_weights_vektor, name='vector_generator')
+        t = threading.Thread(target=self.generate_element_weights_vector, name='vector_generator')
         t.start()
         # t.join()  # just for testing
 

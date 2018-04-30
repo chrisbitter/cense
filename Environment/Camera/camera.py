@@ -12,7 +12,7 @@ class Camera(object):
 
         print("Setup Camera")
 
-        self.__camera = Device(1)
+        self.__camera = Device(0)
         self.SIZE = size
 
     def get_frame(self):

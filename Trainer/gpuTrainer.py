@@ -54,15 +54,15 @@ class GpuTrainer(object):
 
         gpu_root = gpu_settings["remote_data_root"]
 
-        self.remote_new_data = path.abspath(path.join(gpu_root, gpu_settings["remote_data"]))
-        self.remote_model = path.abspath(path.join(gpu_root, gpu_settings["remote_model"]))
-        self.remote_training_params = path.abspath(path.join(gpu_root, gpu_settings["remote_training_params"]))
+        self.remote_new_data = path.join(gpu_root, gpu_settings["remote_data"])
+        self.remote_model = path.join(gpu_root, gpu_settings["remote_model"])
+        self.remote_training_params = path.join(gpu_root, gpu_settings["remote_training_params"])
 
-        self.remote_script_train = path.abspath(path.join(gpu_root, gpu_settings["remote_script_train"]))
-        self.remote_script_reset = path.abspath(path.join(gpu_root, gpu_settings["remote_script_reset"]))
+        self.remote_script_train = path.join(gpu_root, gpu_settings["remote_script_train"])
+        self.remote_script_reset = path.join(gpu_root, gpu_settings["remote_script_reset"])
 
-        self.remote_signal_train = path.abspath(path.join(gpu_root, gpu_settings["remote_signal_train"] + self.id))
-        self.remote_signal_alive = path.abspath(path.join(gpu_root, gpu_settings["remote_signal_alive"] + self.id))
+        self.remote_signal_train = path.join(gpu_root, gpu_settings["remote_signal_train"] + self.id)
+        self.remote_signal_alive = path.join(gpu_root, gpu_settings["remote_signal_alive"] + self.id)
 
     def get_ssh_channel(self):
         ssh = paramiko.SSHClient()

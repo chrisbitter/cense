@@ -105,7 +105,10 @@ class AgentActorCritic(pg.QtCore.QThread):
             self.trainer.reset()
             self.trainer.send_model_to_gpu()
 
-        self.visualizer = Visualizer(self.graph)
+        try:
+            self.visualizer = Visualizer(self.graph)
+        except:
+            pass
 
     def run(self):
         if self.running_mode == RunningMode.TRAIN:
@@ -136,6 +139,8 @@ class AgentActorCritic(pg.QtCore.QThread):
             f.write(",".join(statistics_keys))
             f.write("\n")
 
+        reached_goal = False
+
         while self.running_status == RunningStatus.RUN:
 
             # reset statistics
@@ -154,6 +159,8 @@ class AgentActorCritic(pg.QtCore.QThread):
             if run_number % self.runs_before_testing_from_start == 0 and self.running_status == RunningStatus.RUN:
 
                 self.status_signal.emit("Test from Start")
+
+                reached_goal = False
 
                 try:
                     # reset to start
@@ -190,6 +197,8 @@ class AgentActorCritic(pg.QtCore.QThread):
                             # Exceptions thrown here will be caught and result in aborting training
                             self.world.reset(hard_reset=True)
 
+                            reached_goal = True
+
                         else:
                             self.world.update_current_start_pose()
 
@@ -212,6 +221,8 @@ class AgentActorCritic(pg.QtCore.QThread):
             if run_number % self.runs_before_advancing_start == 0 and run_number % self.runs_before_testing_from_start != 0 and self.running_status == RunningStatus.RUN:
                 self.status_signal.emit("Advancing Start Position")
 
+                reached_goal = False
+
                 try:
                     _states, _actions, _rewards, _new_states, _terminals, run_steps, run_reward = \
                         self.run_until_terminal(0)
@@ -232,8 +243,10 @@ class AgentActorCritic(pg.QtCore.QThread):
 
                     if self.world.is_at_goal():
 
+                        reached_goal = True
+
                         # reset to initial pose to train end of wire again
-                        self.world.reset()
+                        self.world.reset(hard_reset=True)
                     else:
                         self.world.update_current_start_pose()
 
@@ -282,45 +295,46 @@ class AgentActorCritic(pg.QtCore.QThread):
 
             run_steps = 0
 
-            while not run_steps and self.running_status == RunningStatus.RUN:
-                # try to record a run
-                # this is needed, because if for some reason the run_number isn't advanced, the testing, training or
-                #  advancing section might be run over and over
+            if not reached_goal:
+                while not run_steps and self.running_status == RunningStatus.RUN:
+                    # try to record a run
+                    # this is needed, because if for some reason the run_number isn't advanced, the testing, training or
+                    #  advancing section might be run over and over
 
-                try:
-                    _states, _actions, _rewards, _new_states, _terminals, run_steps, run_reward = \
-                        self.run_until_terminal(self.exploration_probability)
+                    try:
+                        _states, _actions, _rewards, _new_states, _terminals, run_steps, run_reward = \
+                            self.run_until_terminal(self.exploration_probability)
 
-                    if run_steps:
-                        [states.append(s) for s in _states]
-                        [actions.append(a) for a in _actions]
-                        [rewards.append(r) for r in _rewards]
-                        [new_states.append(s) for s in _new_states]
-                        [terminals.append(t) for t in _terminals]
+                        if run_steps:
+                            [states.append(s) for s in _states]
+                            [actions.append(a) for a in _actions]
+                            [rewards.append(r) for r in _rewards]
+                            [new_states.append(s) for s in _new_states]
+                            [terminals.append(t) for t in _terminals]
 
-                        # plot
-                        self.steps_signal.emit([run_number + 1, run_steps])
-                        self.exploration_signal.emit([run_number + 1, self.exploration_probability])
+                            # plot
+                            self.steps_signal.emit([run_number + 1, run_steps])
+                            self.exploration_signal.emit([run_number + 1, self.exploration_probability])
 
-                        # collect statistics
-                        statistics["steps"] = run_steps
-                        statistics["rewards"] = run_reward
-                        statistics["exploration_probability"] = self.exploration_probability
+                            # collect statistics
+                            statistics["steps"] = run_steps
+                            statistics["rewards"] = run_reward
+                            statistics["exploration_probability"] = self.exploration_probability
 
-                        # update exploration probability
-                        self.exploration_probability = max(
-                            self.exploration_probability * self.exploration_update_factor,
-                            self.exploration_probability_end)
+                            # update exploration probability
+                            self.exploration_probability = max(
+                                self.exploration_probability * self.exploration_update_factor,
+                                self.exploration_probability_end)
 
-                        run_number += 1
+                            run_number += 1
 
-                except IllegalPoseException:
-                    pass
+                    except IllegalPoseException:
+                        pass
 
-                except UntreatableStateError as e:
-                    self.status_signal.emit("Something went wrong! Stopping Training")
-                    print(type(e))
-                    self.stop_training()
+                    except UntreatableStateError as e:
+                        self.status_signal.emit("Something went wrong! Stopping Training")
+                        print(type(e))
+                        self.stop_training()
 
             statistics_string = ""
 
@@ -361,11 +375,14 @@ class AgentActorCritic(pg.QtCore.QThread):
         # assumes world to be in nonterminal state, as promised by RealWorld
         terminal = False
 
-        while not terminal:
+        while not terminal and self.running_status == RunningStatus.RUN:
 
             state = self.world.observe_state()
 
-            self.visualizer.visualize(self.model, state, self.graph)
+            try:
+                self.visualizer.visualize(self.model, state, self.graph)
+            except:
+                pass
 
             self.state_signal.emit(state)
 
@@ -447,6 +464,8 @@ class AgentActorCritic(pg.QtCore.QThread):
             f.write(",".join(action_keys))
             f.write("\n")
 
+        run_number = 1
+
         while self.running_status == RunningStatus.RUN:
 
             try:
@@ -454,11 +473,14 @@ class AgentActorCritic(pg.QtCore.QThread):
                 _, _, _, _, _, run_steps, _ = self.run_until_terminal(0, action_log)
 
                 self.status_signal.emit("Needed " + str(run_steps) + " Steps")
+                self.test_steps_signal.emit([run_number, run_steps])
 
             except UntreatableStateError as e:
                 self.status_signal.emit("Something went wrong! Shutting down")
                 print(type(e))
                 self.stop_training()
+
+            run_number += 1
 
 
 if __name__ == '__main__':

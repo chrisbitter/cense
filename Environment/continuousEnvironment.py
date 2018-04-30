@@ -29,6 +29,8 @@ class ContinuousEnvironment(object):
 
     START_POSE = np.array([.27, Y_ENGAGED, .38, 0, -np.pi/2, 0])
 
+    DIFF_BETA = 0
+
     GOAL_X = -.23
     #GOAL_X = Controller.CONSTRAINT_MIN[0] + .03
 
@@ -108,6 +110,9 @@ class ContinuousEnvironment(object):
 
         try:
             touched_wire, mean_percentage_traveled = self.controller.move_to_pose(next_pose)
+
+            if not touched_wire:
+                self.DIFF_BETA += action[2] * self.ROTATION_MAX_ANGLE
 
             if touched_wire:
                 reward = self.PUNISHMENT_WIRE * (1 - .4 * mean_percentage_traveled)
@@ -201,6 +206,11 @@ class ContinuousEnvironment(object):
         except IllegalPoseException:
             raise
 
+        while self.DIFF_BETA <= -np.pi:
+            self.execute([0,0,1])
+
+        while self.DIFF_BETA >= np.pi:
+            self.execute([0,0,-1])
         # print(self.DIFF_BETA)
         #
         # while self.DIFF_BETA > .6*np.pi:
@@ -251,6 +261,8 @@ class ContinuousEnvironment(object):
         self.__checkpoints = [self.CURRENT_START_POSE[:3]]
 
         self.reset_stepwatchdog()
+
+        self.DIFF_BETA = 0
 
     def update_current_start_pose(self):
         logging.debug("Real Environment - update_current_start_pose")

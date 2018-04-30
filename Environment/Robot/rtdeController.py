@@ -43,7 +43,7 @@ class ExitedInTerminalStateError(TerminalStateError):
 class RtdeController(object):
     # begin variable and object setup
     # 137.226.189.149
-    ROBOT_HOST = '137.226.189.156'
+    ROBOT_HOST = '192.168.1.30'
     ROBOT_PORT = 30004
     config_filename = fn = os.path.join(os.path.dirname(__file__), 'ur5_configuration.xml')
 
@@ -58,7 +58,8 @@ class RtdeController(object):
     # CONSTRAINT_MAX = np.array([.28, -.3, .7])
 
     CONSTRAINT_MIN = np.array([-.26 , -.41, .08])
-    CONSTRAINT_MAX = np.array([.30, -.26, 0.68])
+    #CONSTRAINT_MAX = np.array([.30, -.26, 0.68])
+    CONSTRAINT_MAX = np.array([.30, -.26, 0.8])
 
     SPEED_FRACTION = 1
 
