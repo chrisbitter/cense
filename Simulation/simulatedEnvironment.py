@@ -4,6 +4,7 @@ import Simulation.vrep as vrep
 import time
 import numpy as np
 
+
 class simulationEnvironment(object):
     def __init__(self):
         self.ROTATION_MAX_ANGLE = np.pi / 2
@@ -20,6 +21,9 @@ class simulationEnvironment(object):
         if self.clientID != -1:
             _, self.targetHandle = vrep.simxGetObjectHandle(self.clientID, 'UR5_target#', vrep.simx_opmode_blocking)
             _, self.tipHandle = vrep.simxGetObjectHandle(self.clientID, 'UR5_tip', vrep.simx_opmode_blocking)
+            _, self.collisionHandle = vrep.simxGetCollisionHandle(self.clientID, 'WireLoopCollision',
+                                                                  vrep.simx_opmode_blocking)
+            _, self.cameraHandle = vrep.simxGetObjectHandle(self.clientID, 'Camera', vrep.simx_opmode_blocking)
 
             vrep.simxStartSimulation(self.clientID, vrep.simx_opmode_blocking)
 
@@ -37,6 +41,8 @@ class simulationEnvironment(object):
 
     def move_to_pose(self, position, orientation):
 
+        touched_wire = False
+
         while True:
 
             while vrep.simxSetObjectOrientation(self.clientID, self.targetHandle, -1, orientation,
@@ -46,7 +52,6 @@ class simulationEnvironment(object):
             while vrep.simxSetObjectPosition(self.clientID, self.targetHandle, -1, position,
                                              vrep.simx_opmode_blocking) != 0:
                 pass
-
 
             current_tip_position, current_tip_orientation = self.get_pose()
             current_target_position, current_target_orientation = self.get_target_pose()
@@ -58,12 +63,11 @@ class simulationEnvironment(object):
             if translation_deviation < self.ERROR_TRANSLATION and rotation_deviation < self.ERROR_ROTATION:
                 break
 
-            returnCode , collisionhandle = vrep.simxGetCollisionHandle(self.clientID, 'Collision',vrep.simx_opmode_blocking)
-           # print( returnCode )
-            #print(collisionhandle)
-            print(vrep.simxReadCollision(self.clientID, collisionhandle, vrep.simx_opmode_blocking))
-            #TODO return colision state, fix collison in the v-rep file
-            #print('\n\n')
+            _, collision = vrep.simxGetIntegerSignal(self.clientID, "Collision", vrep.simx_opmode_blocking)
+
+            touched_wire |= collision
+
+        return touched_wire
 
     def get_pose(self):
         while True:
@@ -95,27 +99,52 @@ class simulationEnvironment(object):
 
         return np.array(position), np.array(orientation)
 
+    def observe_state(self):
+
+        _, resolution, image = vrep.simxGetVisionSensorImage(self.clientID, self.cameraHandle, 0, vrep.simx_opmode_blocking)
+
+        state = np.array(image, dtype=bytes).reshape(tuple(resolution) + (3,)).astype(np.ubyte)
+
+        import matplotlib.pyplot as plt
+
+        plt.imshow(state)
+
+        plt.show()
+
+        return state
+
     def execute(self, action):
-        #print('entzer')
 
-        #print(self.current_position)
-
-        self.current_position[0] -= action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(self.current_orientation) \
-                           - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(self.current_orientation)
-        self.current_position[2] += action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.sin(self.current_orientation) \
-                           + action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.cos(self.current_orientation)
+        self.current_position[0] -= action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.cos(
+            self.current_orientation) \
+                                    - action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.sin(
+            self.current_orientation)
+        self.current_position[2] += action[0] * self.TRANSLATION_SIDEWAYS_MAX_DISTANCE * np.sin(
+            self.current_orientation) \
+                                    + action[1] * self.TRANSLATION_FORWARD_MAX_DISTANCE * np.cos(
+            self.current_orientation)
 
         self.current_orientation += action[2] * self.ROTATION_MAX_ANGLE
-        self.current_orientation = self.current_orientation % (2*np.pi)
+        self.current_orientation = self.current_orientation % (2 * np.pi)
 
         new_orientation = [-np.pi, self.current_orientation, np.pi]
 
-        #print(new_orientation[1])
-        self.move_to_pose(self.current_position, new_orientation)
+        # print(new_orientation[1])
+        touched_wire = self.move_to_pose(self.current_position, new_orientation)
+
+        print(touched_wire)
+
+        # if touched_wire:
+        #     print("Touched")
+        # else:
+        # #    self.reset()
+
 
 if __name__ == "__main__":
 
     env = simulationEnvironment()
 
-    for tt in range(1000):
-        env.execute([0, -0.1, 0.5])
+    env.observe_state()
+
+    #for tt in range(1000):
+    #    env.execute([0, 0, -0.2])
