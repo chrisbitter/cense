@@ -6,13 +6,18 @@ import numpy as np
 
 
 class simulationEnvironment(object):
-    def __init__(self):
+    def __init__(self, config):
         self.ROTATION_MAX_ANGLE = np.pi / 2
         self.TRANSLATION_SIDEWAYS_MAX_DISTANCE = .03
         self.TRANSLATION_FORWARD_MAX_DISTANCE = .03
         self.ERROR_TRANSLATION = .001
         self.ERROR_ROTATION = 1 * np.pi / 180
-        self.START_POSITION = [.2, -.6, 1.07]
+        self.START_POSITION = [.2, -.42, 1.04]
+
+        self.STATE_DIMENSIONS = (40,40,3)
+        self.ACTIONS = 3
+        self.PUNISHMENT_WIRE = -1
+        self.PUNISHMENT_INSUFFICIENT_PROGRESS = -1
 
         vrep.simxFinish(-1)  # just in case, close all opened connections
 
@@ -27,17 +32,25 @@ class simulationEnvironment(object):
 
             vrep.simxStartSimulation(self.clientID, vrep.simx_opmode_blocking)
 
-            current_position, current_orientation = self.get_target_pose()
-
-            self.current_position = self.START_POSITION
+            self.current_position = self.START_POSITION.copy()
             self.current_orientation = 0
+
+            self.reset()
 
     def __del__(self):
         vrep.simxStopSimulation(self.clientID, vrep.simx_opmode_blocking)
 
-    def reset(self):
-        vrep.simxStopSimulation(self.clientID, vrep.simx_opmode_blocking)
-        vrep.simxStartSimulation(self.clientID, vrep.simx_opmode_blocking)
+    def reset(self, hard_reset=False):
+        self.current_position = self.START_POSITION.copy()
+        self.current_orientation = 0
+
+        self.move_to_pose(self.current_position, [-np.pi, self.current_orientation, np.pi])
+
+    def is_at_goal(self):
+        return False
+
+    def update_current_start_pose(self):
+        pass
 
     def move_to_pose(self, position, orientation):
 
@@ -46,11 +59,11 @@ class simulationEnvironment(object):
         while True:
 
             while vrep.simxSetObjectOrientation(self.clientID, self.targetHandle, -1, orientation,
-                                                vrep.simx_opmode_blocking) != 0:
+                                                vrep.simx_opmode_oneshot) != 0:
                 pass
 
             while vrep.simxSetObjectPosition(self.clientID, self.targetHandle, -1, position,
-                                             vrep.simx_opmode_blocking) != 0:
+                                             vrep.simx_opmode_oneshot) != 0:
                 pass
 
             current_tip_position, current_tip_orientation = self.get_pose()
@@ -105,12 +118,6 @@ class simulationEnvironment(object):
 
         state = np.array(image, dtype=bytes).reshape(tuple(resolution) + (3,)).astype(np.ubyte)
 
-        import matplotlib.pyplot as plt
-
-        plt.imshow(state)
-
-        plt.show()
-
         return state
 
     def execute(self, action):
@@ -134,6 +141,14 @@ class simulationEnvironment(object):
 
         print(touched_wire)
 
+        reward = 1
+
+        if touched_wire:
+            reward = -1
+            self.reset()
+
+        return self.observe_state(), reward, touched_wire
+
         # if touched_wire:
         #     print("Touched")
         # else:
@@ -142,9 +157,25 @@ class simulationEnvironment(object):
 
 if __name__ == "__main__":
 
-    env = simulationEnvironment()
+    env = simulationEnvironment({})
 
     env.observe_state()
+
+    for _ in range(3):
+
+        for tt in range(3):
+            env.execute([0.6, 0, 0])
+
+            time.sleep(3)
+
+        env.reset()
+
+    # env.reset()
+    #
+    # env.observe_state()
+    #
+    # for tt in range(3):
+    #   env.execute([0, -1, 0])
 
     #for tt in range(1000):
     #    env.execute([0, 0, -0.2])

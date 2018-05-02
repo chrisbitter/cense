@@ -1,0 +1,7 @@
+{
+  "training_parameters": "training_data/train_params.json",
+  "actor_file": "training_data/model/actor.h5",
+  "critic_file": "training_data/model/critic.h5",
+  "actor_target_file": "training_data/model/actor_target.h5",
+  "critic_target_file": "training_data/model/critic_target.h5"
+}

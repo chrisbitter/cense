@@ -1,6 +1,6 @@
 {
   "collector": {
-    "resume_training": 1,
+    "resume_training": 0,
     "exploration_probability_start": 0.2,
     "exploration_probability_end": 0.2,
     "exploration_probability_runs_until_end": 500,

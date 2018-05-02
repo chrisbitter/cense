@@ -10,10 +10,13 @@ from PyQt5.QtCore import pyqtSignal
 
 import NeuralNetwork.nnFactory as Factory
 from Agent.Noise.emerging_gaussian import emerging_gaussian as Noise
+
+#todo remove exceptions
 from Environment.Robot.rtdeController import IllegalPoseException, SpawnedInTerminalStateError, ExitedInTerminalStateError
-from Environment.continuousEnvironment import ContinuousEnvironment as World, UntreatableStateError, InsufficientProgressError
+from Environment.continuousEnvironment import UntreatableStateError, InsufficientProgressError
+from Simulation.simulatedEnvironment import simulationEnvironment as World
 from Interface.interface import RunningMode
-from Trainer.gpuTrainer import GpuTrainer as Trainer
+from Trainer.localTrainer import LocalTrainer as Trainer
 
 import logging
 import os.path as path
@@ -31,7 +34,6 @@ class RunningStatus:
 
 
 class AgentActorCritic(pg.QtCore.QThread):
-
     running_status = RunningStatus.STOP
 
     status_signal = pyqtSignal(object)
@@ -74,7 +76,7 @@ class AgentActorCritic(pg.QtCore.QThread):
         self.world = World(config["environment"])
 
         self.model_file = path.abspath(path.join(*[project_root, config["trainer"]["gpu_settings"]["local_data_root"],
-                          config["trainer"]["gpu_settings"]["local_model"]]))
+                                                   config["trainer"]["gpu_settings"]["local_model"]]))
 
         # create directory to store everything (statistics, NN-data, etc.)
         self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
@@ -91,7 +93,8 @@ class AgentActorCritic(pg.QtCore.QThread):
             json.dump(self.model.to_json(), f, sort_keys=True, indent=4)
 
         # if there's already a model, use it. Else create new model
-        if (collector_config["resume_training"] or self.running_mode == RunningMode.PLAY) and os.path.isfile(self.model_file):
+        if (collector_config["resume_training"] or self.running_mode == RunningMode.PLAY) and os.path.isfile(
+                self.model_file):
             self.model.load_weights(self.model_file)
         else:
             self.model.save_weights(self.model_file)
@@ -268,10 +271,10 @@ class AgentActorCritic(pg.QtCore.QThread):
                     logging.debug("Replace NN and start new training")
 
                     # deep copy experience
-                    gpu_states = states.copy() #np.array(states).tolist()
+                    gpu_states = states.copy()  # np.array(states).tolist()
                     gpu_actions = actions.copy()
                     gpu_rewards = rewards.copy()
-                    gpu_new_states = new_states.copy() #np.array(new_states).tolist()
+                    gpu_new_states = new_states.copy()  # np.array(new_states).tolist()
                     gpu_terminals = terminals.copy()
 
                     with self.graph.as_default():
@@ -386,7 +389,7 @@ class AgentActorCritic(pg.QtCore.QThread):
             self.state_signal.emit(state)
 
             with self.graph.as_default():
-                #print(np.expand_dims(state, axis=0))
+                # print(np.expand_dims(state, axis=0))
                 action_original = np.reshape(self.model.predict(np.expand_dims(state, axis=0)), self.world.ACTIONS)
 
             if np.any(np.isnan(action_original)):
