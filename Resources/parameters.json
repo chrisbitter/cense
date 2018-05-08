@@ -1,13 +1,13 @@
 {
   "collector": {
-    "resume_training": 1,
-    "exploration_probability_start": 0.2,
-    "exploration_probability_end": 0.2,
-    "exploration_probability_runs_until_end": 500,
+    "resume_training": 0,
+    "exploration_probability_start": 1,
+    "exploration_probability_end": 0.3,
+    "exploration_probability_runs_until_end": 5000,
     "exploration_probability_boost_runs_until_end": 50,
     "runs_before_update": 1,
-    "runs_before_advancing_start": 3,
-    "runs_before_testing_from_start": 15,
+    "runs_before_advancing_start": 10,
+    "runs_before_testing_from_start": 50,
     "min_steps_before_model_save": 30,
     "continue_after_success": 1,
     "data_storage": "Results/Logs"

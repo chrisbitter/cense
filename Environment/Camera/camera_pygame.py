@@ -1,4 +1,5 @@
 import pygame.camera
+import pygame
 import numpy as np
 from scipy.misc import imresize
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ class Camera(object):
     def __init__(self, dim=(40, 40, 3)):
         self.dim = dim
 
+        pygame.init()
         pygame.camera.init()
 
         cameras = pygame.camera.list_cameras()
@@ -37,10 +39,9 @@ class Camera(object):
 
 if __name__ == '__main__':
 
-    dim = (360, 360, 3)
+    dim = (640, 480, 3)
 
     cam = Camera(dim)
-
 
     plt.ion()
     plt.show()
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     while True:
 
         t = time.time()
-
+        time.sleep(4)
 
         img = cam.get_frame()
 

@@ -1,8 +1,6 @@
 import json
 import os
 import time
-from threading import Thread
-
 import numpy as np
 import pyqtgraph as pg
 import tensorflow as tf
@@ -10,15 +8,16 @@ from PyQt5.QtCore import pyqtSignal
 
 import NeuralNetwork.nnFactory as Factory
 from Agent.Noise.emerging_gaussian import emerging_gaussian as Noise
-from Environment.Robot.rtdeController import IllegalPoseException, SpawnedInTerminalStateError, ExitedInTerminalStateError
-from Environment.continuousEnvironment import ContinuousEnvironment as World, UntreatableStateError, InsufficientProgressError
-from Interface.interface import RunningMode
-from Trainer.gpuTrainer import GpuTrainer as Trainer
 
+#todo remove exceptions
+from Environment.Robot.rtdeController import SpawnedInTerminalStateError, ExitedInTerminalStateError
+from Environment.continuousEnvironment import UntreatableStateError, InsufficientProgressError
+from Simulation.simulatedEnvironment import simulationEnvironment as World, IllegalPoseException
+from Interface.interface import RunningMode
 import logging
 import os.path as path
 
-from ControllerVisualisierung.controllerVisualisierung import Visualizer
+from keras import backend as K
 
 # silence tf compile warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -31,7 +30,6 @@ class RunningStatus:
 
 
 class AgentActorCritic(pg.QtCore.QThread):
-
     running_status = RunningStatus.STOP
 
     status_signal = pyqtSignal(object)
@@ -74,7 +72,7 @@ class AgentActorCritic(pg.QtCore.QThread):
         self.world = World(config["environment"])
 
         self.model_file = path.abspath(path.join(*[project_root, config["trainer"]["gpu_settings"]["local_data_root"],
-                          config["trainer"]["gpu_settings"]["local_model"]]))
+                                                   config["trainer"]["gpu_settings"]["local_model"]]))
 
         # create directory to store everything (statistics, NN-data, etc.)
         self.experiment_directory = os.path.join(self.data_storage, time.strftime('%Y%m%d-%H%M%S'))
@@ -84,30 +82,48 @@ class AgentActorCritic(pg.QtCore.QThread):
         with open(os.path.join(self.experiment_directory, 'train_parameters.json'), 'w') as f:
             json.dump(config, f, sort_keys=True, indent=4)
 
+        K.set_learning_phase(0)
         # create neural network
-        self.model = Factory.actor_network(self.world.STATE_DIMENSIONS)
+        self.actor = Factory.actor_network(self.world.STATE_DIMENSIONS)
+        self.actor_target = Factory.actor_network(self.world.STATE_DIMENSIONS)
+        self.critic = Factory.critic_network(self.world.STATE_DIMENSIONS)
+        self.critic_target = Factory.critic_network(self.world.STATE_DIMENSIONS)
 
         with open(os.path.join(self.experiment_directory, 'model_architecture.json'), 'w') as f:
-            json.dump(self.model.to_json(), f, sort_keys=True, indent=4)
+            json.dump(self.actor.to_json(), f, sort_keys=True, indent=4)
 
         # if there's already a model, use it. Else create new model
-        if (collector_config["resume_training"] or self.running_mode == RunningMode.PLAY) and os.path.isfile(self.model_file):
-            self.model.load_weights(self.model_file)
+        if (collector_config["resume_training"] or self.running_mode == RunningMode.PLAY) and os.path.isfile(
+                self.model_file):
+            self.actor.load_weights(self.model_file)
         else:
-            self.model.save_weights(self.model_file)
+            self.actor.save_weights(self.model_file)
 
+        ####
+
+        self.batch_size = 32
+        self.discount_factor = .99
+        self.target_update_rate = .0001
+
+        self.action_gradient = tf.placeholder(tf.float32, self.actor.output_shape)
+        params_grad = tf.gradients(self.actor.output, self.actor.trainable_weights, -self.action_gradient)
+        grads = zip(params_grad, self.actor.trainable_weights)
+        optimizer = tf.train.AdamOptimizer(0.00001)
+        self.optimize = optimizer.apply_gradients(grads)
+
+        self.sess = K.get_session()
+
+        gradients = K.gradients(self.critic.outputs, self.critic.inputs[1])[0]  # gradient tensors
+        self.get_gradients = K.function(inputs=self.critic.inputs, outputs=[gradients])
+        
+        ####
+        self.actor._make_predict_function()
+        self.critic._make_predict_function()
+        self.actor_target._make_predict_function()
+        self.critic_target._make_predict_function()
         self.graph = tf.get_default_graph()
 
-        self.trainer = Trainer(project_root, config["trainer"])
 
-        if not collector_config["resume_training"]:
-            self.trainer.reset()
-            self.trainer.send_model_to_gpu()
-
-        try:
-            self.visualizer = Visualizer(self.graph)
-        except:
-            pass
 
     def run(self):
         if self.running_mode == RunningMode.TRAIN:
@@ -179,13 +195,13 @@ class AgentActorCritic(pg.QtCore.QThread):
                         statistics["testing_rewards"] = run_reward
 
                         if run_steps > best_test_steps and run_steps >= self.min_steps_before_model_save:
-                            self.model.save(os.path.join(self.experiment_directory,
+                            self.actor.save(os.path.join(self.experiment_directory,
                                                          'actor_' + str(run_number + 1) + '_' +
                                                          str(run_steps) + '.h5'))
 
                         if self.world.is_at_goal():
                             # once the wire is learned successfully, stop training
-                            self.model.save(
+                            self.actor.save(
                                 os.path.join(self.experiment_directory, 'actor_' + str(run_number + 1) + "_"
                                              + str(run_steps) + '_goal.h5'))
                             self.status_signal.emit("Successfully completed wire!")
@@ -261,36 +277,66 @@ class AgentActorCritic(pg.QtCore.QThread):
 
             # train neural network after collecting some experience
             if run_number % self.runs_before_update == 0 and self.running_status == RunningStatus.RUN:
-                if self.trainer.is_done_training() and len(states):
-                    # and (self.trainer.training_number > 0 or len(states) >= self.trainer.batch_size_start):
-                    print("Update Network: Success")
-                    statistics["successful_network_update"] = 1
-                    logging.debug("Replace NN and start new training")
+                # and (self.trainer.training_number > 0 or len(states) >= self.trainer.batch_size_start):
+                print("Update Network")
 
-                    # deep copy experience
-                    gpu_states = states.copy() #np.array(states).tolist()
-                    gpu_actions = actions.copy()
-                    gpu_rewards = rewards.copy()
-                    gpu_new_states = new_states.copy() #np.array(new_states).tolist()
-                    gpu_terminals = terminals.copy()
+                experience_buffer = range(len(states))
 
-                    with self.graph.as_default():
-                        self.model.load_weights(self.model_file)
+                # sample a minibatch
+                minibatch = np.random.choice(experience_buffer, size=self.batch_size)
 
-                    Thread(target=self.trainer.train,
-                           args=(gpu_states, gpu_actions, gpu_rewards, gpu_new_states, gpu_terminals)).start()
+                # inputs are the states
+                batch_states = np.array([states[i] for i in minibatch])  # bx(sxs)
+                batch_actions = np.array([actions[i] for i in minibatch])  # bxa
+                batch_rewards = np.array([rewards[i] for i in minibatch])  # bx1
+                batch_new_states = np.array([new_states[i] for i in minibatch])  # bx(sxs)
+                batch_terminals = np.array([terminals[i] for i in minibatch]).astype('bool')  # bx1
 
-                    training_number += 1
+                with self.graph.as_default():
+                    K.set_learning_phase(1)
+                    target_q_values = self.critic_target.predict_on_batch(
+                        [batch_new_states, self.actor_target.predict(batch_new_states)])  # bx1
 
-                    # clear experience collection
-                    states = []
-                    actions = []
-                    rewards = []
-                    new_states = []
-                    terminals = []
-                else:
-                    # self.status_signal.emit("Update Network: Failed")
-                    statistics["successful_network_update"] = 0
+                    y = batch_rewards.copy()  # bx1
+
+                    for k in range(self.batch_size):
+                        if not batch_terminals[k]:
+                            y[k] += self.discount_factor * target_q_values[k]
+
+                    # train critic with actual action-state value
+                    self.critic.train_on_batch([batch_states, batch_actions], y)
+                    # get action which would have been chosen by actor
+                    actions_for_gradients = self.actor.predict(batch_states)  # bxa
+
+                    # get action gradients w.r.t. critic output
+                    action_grads = self.get_gradients([batch_states, actions_for_gradients])[0]  # bxa
+
+                    # use action gradients to improve action chosen by actor
+                    self.sess.run(self.optimize, feed_dict={
+                        self.actor.inputs[0]: batch_states,
+                        self.action_gradient: action_grads
+                    })
+
+                    actor_weights = self.actor.get_weights()
+                    actor_target_weights = self.actor_target.get_weights()
+                    for i in range(len(actor_weights)):
+                        actor_target_weights[i] = self.target_update_rate * actor_weights[i] + \
+                                                  (1 - self.target_update_rate) * actor_target_weights[i]
+                    self.actor_target.set_weights(actor_target_weights)
+
+                    # update critic target
+                    critic_weights = self.critic.get_weights()
+                    critic_target_weights = self.critic_target.get_weights()
+                    for i in range(len(critic_weights)):
+                        critic_target_weights[i] = self.target_update_rate * critic_weights[i] + \
+                                                   (1 - self.target_update_rate) * critic_target_weights[i]
+                    self.critic_target.set_weights(critic_target_weights)
+
+                    self.actor.save_weights(self.model_file)
+                    K.set_learning_phase(0)
+                    self.actor.load_weights(self.model_file)
+
+                training_number += 1
 
             run_steps = 0
 
@@ -378,16 +424,15 @@ class AgentActorCritic(pg.QtCore.QThread):
 
             state = self.world.observe_state()
 
-            try:
-                self.visualizer.visualize(self.model, state, self.graph)
-            except:
-                pass
-
             self.state_signal.emit(state)
 
             with self.graph.as_default():
-                #print(np.expand_dims(state, axis=0))
-                action_original = np.reshape(self.model.predict(np.expand_dims(state, axis=0)), self.world.ACTIONS)
+                # print(np.expand_dims(state, axis=0))
+                self.actor._make_predict_function()
+                K.set_learning_phase(0)
+
+                action_original = np.reshape(self.actor.predict(np.expand_dims(state, axis=0)), self.world.ACTIONS)
+
 
             if np.any(np.isnan(action_original)):
                 raise ValueError("Net is broken!")
@@ -453,7 +498,7 @@ class AgentActorCritic(pg.QtCore.QThread):
 
     def play(self):
 
-        self.model.load_weights(self.model_file)
+        self.actor.load_weights(self.model_file)
 
         action_log = os.path.join(self.experiment_directory, 'action_log.csv')
 
