@@ -63,7 +63,7 @@ class CockpitWindow(QtWidgets.QMainWindow):
 
         action_plot_item.setYRange(-1, 1)
 
-        from Agent.agentAC_simulation import AgentActorCritic as Agent
+        from Agent.agentAC_offline import AgentActorCritic as Agent
 
         project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
@@ -119,9 +119,9 @@ class CockpitWindow(QtWidgets.QMainWindow):
 
         # # layout.addWidget(steps_widget, 1, 1)
         # layout.addWidget(state_plot_widget, 1, 1)
-        # # layout.addWidget(exploration_widget, 1, 3)
+        layout.addWidget(exploration_widget, 2, 2)
         # layout.addWidget(test_steps_widget, 2, 1)
-        # layout.addWidget(action_widget, 1, 2)
+        layout.addWidget(action_widget, 2, 1)
         # layout.addWidget(self.text_widget, 2, 2)
 
         layout.addWidget(state_plot_widget, 1, 1)
@@ -251,7 +251,10 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("CENSE-Demonstrator")
 
-    window_running_mode = WindowRunningMode()
-    window_running_mode.show()
+    # window_running_mode = WindowRunningMode()
+    # window_running_mode.show()
+
+    cockpitWindow = CockpitWindow(RunningMode.TRAIN)
+    cockpitWindow.show()
 
     sys.exit(app.exec_())

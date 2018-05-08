@@ -70,7 +70,7 @@ class LocalTrainer(object):
         # reset gpu
         reset()
 
-    def train(self, states, actions, rewards, new_states, terminals):
+    def train(self, states, actions, rewards, new_states, terminals, graph):
 
         self.done_training = False
         self.training_number += 1
@@ -117,7 +117,7 @@ class LocalTrainer(object):
 
         # if training file is dead, launch it (with id)
         if not gpu_alive:
-            Thread(target=self.run_training_script).start()
+            Thread(target=self.run_training_script, args=(graph)).start()
 
         while path.exists(self.remote_signal_train):
             pass
@@ -127,10 +127,10 @@ class LocalTrainer(object):
 
         self.done_training = True
 
-    def run_training_script(self):
+    def run_training_script(self, graph):
         print("run training script")
 
-        train(self.id)
+        train(self.id, graph)
 
     def send_model_to_gpu(self):
 
