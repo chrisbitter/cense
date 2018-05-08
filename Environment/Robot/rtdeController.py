@@ -132,6 +132,11 @@ class RtdeController(object):
         self.abort_signal.__dict__[b"input_int_register_0"] = 0
         self.connection.send(self.abort_signal)
 
+    def shutdown(self):
+        self.loop.shutdown()
+        #todo: shutdown rtde
+
+
     def current_pose(self):
         with self.lock:
             touching_wire = self.loop.is_touching_wire()
