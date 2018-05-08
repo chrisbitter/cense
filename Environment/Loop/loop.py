@@ -11,7 +11,7 @@ class Loop:
         self.timestamp_touched = 0
         self.timestamp_not_touched = 0
 
-        self.running = True
+        self.run = True
 
         thread = threading.Thread(target=self.check_connection)
         thread.daemon = True
@@ -19,7 +19,7 @@ class Loop:
         thread.start()
 
     def shutdown(self):
-        self.running = False
+        self.run = False
 
     def check_connection(self):
         board = Arduino('com4')
@@ -34,7 +34,7 @@ class Loop:
 
         tic = time.time()
 
-        while self.running:
+        while self.run:
             value_a0 = analog_0.read()
             value_a1 = analog_1.read()
 
