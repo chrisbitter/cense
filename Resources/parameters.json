@@ -1,6 +1,6 @@
 {
   "collector": {
-    "resume_training": 0,
+    "resume_training": 1,
     "exploration_probability_start": 1,
     "exploration_probability_end": 0.3,
     "exploration_probability_runs_until_end": 5000,
@@ -22,7 +22,7 @@
     "discount_factor": 0.99,
     "target_update_rate": 0.001,
     "gpu_settings":{
-      "host": "192.168.1.20",
+      "host": "137.226.188.42",
       "port": 22,
       "user": "cscheiderer",
       "password": "universalrobot5",
