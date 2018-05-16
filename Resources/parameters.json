@@ -1,8 +1,8 @@
 {
   "collector": {
     "resume_training": 0,
-    "exploration_probability_start": 1,
-    "exploration_probability_end": 0.3,
+    "exploration_probability_start": 0.2,
+    "exploration_probability_end": 0.1,
     "exploration_probability_runs_until_end": 5000,
     "exploration_probability_boost_runs_until_end": 50,
     "runs_before_update": 1,
@@ -57,9 +57,9 @@
 
     "step_watchdog": 10,
     
-    "translation_forward_max_distance": 0.03,
-    "translation_sideways_max_distance": 0.03,
-    "rotation_max_angle": 90,
+    "translation_forward_max_distance": 0.01,
+    "translation_sideways_max_distance": 0.01,
+    "rotation_max_angle": 45,
     "start_pose": [0.27, -0.38, 0.38, 0, -90, 0]
   }
 }

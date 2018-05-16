@@ -108,7 +108,7 @@ class AgentActorCritic(pg.QtCore.QThread):
         self.action_gradient = tf.placeholder(tf.float32, self.actor.output_shape)
         params_grad = tf.gradients(self.actor.output, self.actor.trainable_weights, -self.action_gradient)
         grads = zip(params_grad, self.actor.trainable_weights)
-        optimizer = tf.train.AdamOptimizer(0.00001)
+        optimizer = tf.train.AdamOptimizer(0.000005)
         self.optimize = optimizer.apply_gradients(grads)
 
         self.sess = K.get_session()
@@ -122,8 +122,6 @@ class AgentActorCritic(pg.QtCore.QThread):
         self.actor_target._make_predict_function()
         self.critic_target._make_predict_function()
         self.graph = tf.get_default_graph()
-
-
 
     def run(self):
         if self.running_mode == RunningMode.TRAIN:
