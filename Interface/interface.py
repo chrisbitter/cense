@@ -63,7 +63,7 @@ class CockpitWindow(QtWidgets.QMainWindow):
 
         action_plot_item.setYRange(-1, 1)
 
-        from Agent.agentAC_offline import AgentActorCritic as Agent
+        from Agent.agentAC import AgentActorCritic as Agent
 
         project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 

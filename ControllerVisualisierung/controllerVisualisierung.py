@@ -31,7 +31,7 @@ To generate example element_weights_vektor the method to import is generate_elem
 
 class VisSocket:
     def __init__(self):
-        self.TCP_IP = '192.168.1.40'
+        self.TCP_IP = '137.226.189.202'
         self.TCP_PORT = 59595
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
