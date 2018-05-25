@@ -104,10 +104,10 @@ class AgentActorCritic(pg.QtCore.QThread):
             self.trainer.reset()
             self.trainer.send_model_to_gpu()
 
-        try:
-            self.visualizer = Visualizer(self.graph)
-        except:
-            pass
+        #try:
+        #    self.visualizer = Visualizer(self.graph)
+        #except:
+        #    pass
 
     def run(self):
         if self.running_mode == RunningMode.TRAIN:
@@ -378,10 +378,10 @@ class AgentActorCritic(pg.QtCore.QThread):
 
             state = self.world.observe_state()
 
-            try:
-                self.visualizer.visualize(self.model, state, self.graph)
-            except:
-                pass
+            #try:
+            #    self.visualizer.visualize(self.model, state, self.graph)
+            #except:
+            #    pass
 
             self.state_signal.emit(state)
 

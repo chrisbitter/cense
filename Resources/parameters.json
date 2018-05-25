@@ -1,13 +1,13 @@
 {
   "collector": {
-    "resume_training": 0,
+    "resume_training": 1,
     "exploration_probability_start": 1,
     "exploration_probability_end": 0.3,
     "exploration_probability_runs_until_end": 5000,
     "exploration_probability_boost_runs_until_end": 50,
     "runs_before_update": 1,
-    "runs_before_advancing_start": 10,
-    "runs_before_testing_from_start": 50,
+    "runs_before_advancing_start": 2,
+    "runs_before_testing_from_start": 10,
     "min_steps_before_model_save": 30,
     "continue_after_success": 1,
     "data_storage": "Results/Logs"
@@ -22,7 +22,7 @@
     "discount_factor": 0.99,
     "target_update_rate": 0.001,
     "gpu_settings":{
-      "host": "192.168.1.20",
+      "host": "137.226.188.42",
       "port": 22,
       "user": "cscheiderer",
       "password": "universalrobot5",
