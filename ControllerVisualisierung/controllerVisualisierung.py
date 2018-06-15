@@ -112,7 +112,7 @@ class Visualizer:
                     layer_counter += 1
 
                 self.send_vector()
-                print('Active : {}'.format(self.element_weights_vector))
+                #print('Active Threads: {}'.format(threading.active_count()))
             except:
                 pass
 
