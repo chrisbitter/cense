@@ -31,7 +31,7 @@ To generate example element_weights_vektor the method to import is generate_elem
 
 class VisSocket:
     def __init__(self):
-        self.TCP_IP = '137.226.189.202'
+        self.TCP_IP = '137.226.189.157'
         self.TCP_PORT = 59595
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -55,6 +55,8 @@ class Visualizer:
         self.actor_model = None
         self.critic_model = None
         self.state = None
+        self.t = threading.Thread(target=self.generate_element_weights_vector, name='vector_generator')
+
         self.vis_socket = VisSocket()
         self.comm_tries = 10
         self.vis_socket.connect()
@@ -110,18 +112,22 @@ class Visualizer:
                     layer_counter += 1
 
                 self.send_vector()
+                print('Active : {}'.format(self.element_weights_vector))
             except:
                 pass
 
             self.lock.release()
 
     def visualize(self, model, state, graph):
-        self.actor_model = model
-        self.state = state
-        self.graph = graph
-        t = threading.Thread(target=self.generate_element_weights_vector, name='vector_generator')
-        t.start()
-        # t.join()  # just for testing
+        if not self.t.is_alive():
+            self.actor_model = model
+            self.state = state
+            self.graph = graph
+            del self.t
+            self.t = threading.Thread(target=self.generate_element_weights_vector, name='vector_generator')
+            self.t.start()
+            # print("Active Threads: {}".format(threading.enumerate()))
+            # t.join()  # just for testing
 
 
 if __name__ == "__main__":
