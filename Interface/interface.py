@@ -18,6 +18,7 @@ from threading import Thread
 import sys
 import os
 
+sys.path.append("C:/Users/Cense/PycharmProjects/Cense/Cense")
 
 class RunningMode:
     TRAIN = 0
