@@ -2,6 +2,33 @@
 
 This project uses Machine Learning to learn the Loop-Wire Game
 
+## Git Conventions
+
+###Branch Names
+
+Convention: **topic_short/initials/branchname**
+
+####Topics
+
+| Topic | topic_short | Description |
+|---|---|---|
+| ro | Robot | direct interfaces with the hardware |
+| ag | Agent | learning algorithms |
+| en | Environment | - |
+| si | Simulation | - |
+| mi | Middleware | managing settings and training |
+| ui | User Interface | - |
+| vr | Virtual Reality | - |
+
+####Initials
+
+WM: First letter of first and last name
+- Max Muster &rarr; mm
+
+HiWi: First two letters of first and last name
+- Max Muster &rarr; mamu
+
+####branch name
 
 ## Requirements
 
