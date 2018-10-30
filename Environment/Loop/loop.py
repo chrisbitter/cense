@@ -22,7 +22,7 @@ class Loop:
         self.run = False
 
     def check_connection(self):
-        board = Arduino('com5')
+        board = Arduino('com4')
         it = util.Iterator(board)
         it.setDaemon(True)
         it.start()
