@@ -8,7 +8,7 @@
     "runs_before_update": 1,
     "runs_before_advancing_start": 2,
     "runs_before_testing_from_start": 10,
-    "min_steps_before_model_save": 30,
+    "min_steps_before_model_save": 1,
     "continue_after_success": 1,
     "data_storage": "Results/Logs"
   },

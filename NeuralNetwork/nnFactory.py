@@ -73,3 +73,10 @@ def critic_network(input_shape):
     model.compile(loss='mse', optimizer='adam')
 
     return model
+
+if __name__=="__main__":
+    actor_model = actor_network((40, 40, 3))
+    actor_model.save('new_actor_model.h5')
+
+    critic_model = critic_network((40, 40, 3))
+    critic_model.save('new_critic_model.h5')
