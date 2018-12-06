@@ -13,7 +13,7 @@ from enum import Enum
 class RunningStatus(Enum):
     RUN = 0
     PAUSE = 1
-    STOP = 2
+    SHUTDOWN = 2
 
 
 app = Flask(__name__)
@@ -30,10 +30,7 @@ def status():
 
     global running_status
 
-    print(request.form)
-
     if 'new_status' in request.form:
-        print(1)
         if not hasattr(RunningStatus, request.form['new_status']):
             http_status = http.HTTPStatus.UNPROCESSABLE_ENTITY
         else:
@@ -47,6 +44,14 @@ def get_params():
     global params
     return jsonify(params)
 
+@app.route('/reset', methods=['POST'])
+def reset():
+    global params
+    with open("default.json") as json_data:
+        params = json.load(json_data)
+
+    global run_number
+    run_number = 0
 
 if __name__ == "__main__":
 
@@ -56,24 +61,29 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    running_status = RunningStatus.STOP
+    running_status = RunningStatus.PAUSE
 
-    with open("default.json") as json_data:
-        params = json.load(json_data)
+    params = None
+    run_number = None
 
-    # todo: load default default.json in params
+    app_thread = Thread(target=app.run, args=(args.host, args.port), daemon=True)
+    app_thread.start()
 
-    Thread(target=app.run, args=(args.host, args.port)).start()
+    reset()
 
-    run = 0
-
-    while True:
+    while running_status != RunningStatus.SHUTDOWN:
 
         if running_status == RunningStatus.RUN:
 
-            print(run)
+            if run_number % params.runs_before_testing_from_start == 0:
+
+                # todo: reset world
+
+                pass
+
+            print(run_number)
             time.sleep(1)
-            run += 1
+            run_number += 1
 
         else:
             time.sleep(.1)
