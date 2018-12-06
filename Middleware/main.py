@@ -11,6 +11,9 @@ from enum import Enum
 import pandas as pd
 import numpy as np
 
+import math
+
+
 class RunningStatus(Enum):
     RUN = 0
     PAUSE = 1
@@ -45,6 +48,25 @@ def get_params():
     global params
     return jsonify(params)
 
+
+@app.route('/get_statistics', methods=['POST'])
+def get_statistics():
+    global statistics
+
+    payload = {}
+
+    payload["run_number"] = statistics.index.tolist()
+
+    for col in statistics.columns:
+        payload[col] = statistics[col].tolist()
+
+    return jsonify(payload)
+
+
+def exponential_decay(params):
+    return lambda x: max(params["cutoff"], params["start"] * math.exp(-params["decay"] * x))
+
+
 @app.route('/reset', methods=['POST'])
 def reset():
     global params
@@ -57,8 +79,21 @@ def reset():
     global statistics
     statistics = pd.DataFrame(columns=["steps", "reward", "exploration_probability"])
 
+    #global running_status
+    #running_status = RunningStatus.PAUSE
+
+    global exploration_probability_function
+
+    if params["exploration_probability"]["type"] == "exp_decay":
+        exploration_probability_function = exponential_decay(params["exploration_probability"]["params"])
+
+    else:
+        raise NotImplementedError("Parameter exploration_probability wrongly configured")
+
+    return "", http.HTTPStatus.NO_CONTENT
 
 def run_until_terminal(exploration_probability):
+    # print("run_until_terminal(exploration_probability={})".format(exploration_probability))
 
     global running_status
 
@@ -76,15 +111,21 @@ def run_until_terminal(exploration_probability):
             # todo trigger world to execute
             # todo get reward and terminal
 
-            step_reward = .7
+            step_reward = 2 * np.random.random() - 1
 
-            terminal = True
+            terminal = np.random.random() > .8
             steps += 1
             reward += step_reward
 
-            pass
+
+        elif running_status == RunningStatus.PAUSE:
+            time.sleep(.1)
+
+        elif running_status == RunningStatus.SHUTDOWN:
+            break
 
     return steps, reward
+
 
 if __name__ == "__main__":
 
@@ -99,6 +140,8 @@ if __name__ == "__main__":
     params = None
     run_number = None
     statistics = None
+    exploration_probability_function = None
+    exploration_probability = None
 
     app_thread = Thread(target=app.run, args=(args.host, args.port), daemon=True)
     app_thread.start()
@@ -109,19 +152,27 @@ if __name__ == "__main__":
 
         if running_status == RunningStatus.RUN:
 
-            if run_number % params.runs_before_testing_from_start == 0:
-
-                # todo: reset world
-
-                steps, reward = run_until_terminal(0)
-
-                continue
-
-
+            run_number += 1
 
             print(run_number)
-            time.sleep(1)
-            run_number += 1
+
+            if run_number % params['runs_before_testing_from_start'] == 0:
+                # todo: reset world
+                exploration_probability = 0
+
+            elif run_number % params['runs_before_advancing_start'] == 0:
+                exploration_probability = 0
+
+            else:
+                exploration_probability = exploration_probability_function(run_number)
+
+            time.sleep(.2)
+
+            steps, reward = run_until_terminal(exploration_probability)
+
+            statistics = statistics.append(pd.DataFrame(
+                data={"steps": steps, "reward": reward, "exploration_probability": exploration_probability},
+                index=[run_number]))
 
         else:
             time.sleep(.1)

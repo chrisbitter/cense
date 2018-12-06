@@ -1,11 +1,11 @@
 {
-  "exploration_probablity": {
-    "type": "exp",
-    "params": {"start": 1, "decay": 0.9997, "cutoff": 0.3}]
+  "exploration_probability": {
+    "type": "exp_decay",
+    "params": {"start": 1, "decay": 0.00032, "cutoff": 0.2}
   },
   "noise_function": "emerging_gaussian",
-  "runs_before_advancing_start": 2,
-  "runs_before_testing_from_start": 10,
+  "runs_before_advancing_start": 10,
+  "runs_before_testing_from_start": 50,
   "min_steps_before_model_save": 30,
   "continue_after_success": true,
   "data_storage": "Results/Logs",
