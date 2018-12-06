@@ -21,8 +21,8 @@ import os
 sys.path.append("C:/Users/Cense/PycharmProjects/Cense/Cense")
 
 class RunningMode:
-    TRAIN = 0
-    PLAY = 1
+    TRAIN = 1
+    PLAY = 0
 
 
 class CockpitWindow(QtWidgets.QMainWindow):
