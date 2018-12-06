@@ -16,33 +16,36 @@ class RunningStatus(Enum):
     STOP = 2
 
 
-
 app = Flask(__name__)
+
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-
     return render_template("frontend.html")
-
-    # return jsonify(params)
 
 
 @app.route('/status', methods=['POST'])
-def change_status():
-    print(request.form)
-    print(request.values)
-
-    if 'new_status' not in request.args:
-        return "Argument 'new_status' missing", http.HTTPStatus.UNPROCESSABLE_ENTITY
-
-    if not hasattr(RunningStatus, request.args['new_status']):
-        return "Argument 'new_status' has unknown value: " + request.args[
-            'new_status'], http.HTTPStatus.UNPROCESSABLE_ENTITY
+def status():
+    http_status = http.HTTPStatus.OK
 
     global running_status
-    running_status = RunningStatus[request.args['new_status']]
 
-    return '', http.HTTPStatus.OK
+    print(request.form)
+
+    if 'new_status' in request.form:
+        print(1)
+        if not hasattr(RunningStatus, request.form['new_status']):
+            http_status = http.HTTPStatus.UNPROCESSABLE_ENTITY
+        else:
+            running_status = RunningStatus[request.form['new_status']]
+
+    return jsonify(running_status.name), http_status
+
+
+@app.route('/get_params', methods=['POST'])
+def get_params():
+    global params
+    return jsonify(params)
 
 
 if __name__ == "__main__":
@@ -55,9 +58,10 @@ if __name__ == "__main__":
 
     running_status = RunningStatus.STOP
 
-    params = {"a": 1, "b": "2"}
+    with open("default.json") as json_data:
+        params = json.load(json_data)
 
-    # todo: load default parameters.json in params
+    # todo: load default default.json in params
 
     Thread(target=app.run, args=(args.host, args.port)).start()
 

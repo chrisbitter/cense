@@ -1,0 +1,40 @@
+{
+  "collector": {
+    "resume_training": 1,
+    "exploration_probability_start": 1,
+    "exploration_probability_end": 0.3,
+    "exploration_probability_runs_until_end": 5000,
+    "exploration_probability_boost_runs_until_end": 50,
+    "runs_before_update": 1,
+    "runs_before_advancing_start": 2,
+    "runs_before_testing_from_start": 10,
+    "min_steps_before_model_save": 30,
+    "continue_after_success": 1,
+    "data_storage": "Results/Logs"
+  },
+  "trainer": {
+    "epochs": 1,
+    "batch_size": 32,
+    "discount_factor": 0.99,
+    "target_update_rate": 0.001
+
+  },
+  "environment": {
+
+    "checkpoint_distance": 0.08,
+
+    "punishment_wire": -1,
+    "punishment_insufficient_progress": -1,
+    "punishment_old_checkpoint": -0.5,
+    "reward_goal": 1,
+    "reward_new_checkpoint": 1,
+    "reward_generic": -0.1,
+
+    "step_watchdog": 10,
+    
+    "translation_forward_max_distance": 0.03,
+    "translation_sideways_max_distance": 0.03,
+    "rotation_max_angle": 90,
+    "start_pose": [0.27, -0.38, 0.38, 0, -90, 0]
+  }
+}
