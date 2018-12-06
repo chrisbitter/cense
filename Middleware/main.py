@@ -8,7 +8,8 @@ import argparse
 from threading import Thread
 from flask import request
 from enum import Enum
-
+import pandas as pd
+import numpy as np
 
 class RunningStatus(Enum):
     RUN = 0
@@ -53,6 +54,38 @@ def reset():
     global run_number
     run_number = 0
 
+    global statistics
+    statistics = pd.DataFrame(columns=["steps", "reward", "exploration_probability"])
+
+
+def run_until_terminal(exploration_probability):
+
+    global running_status
+
+    steps = 0
+    reward = 0
+
+    terminal = False
+
+    while not terminal:
+
+        if running_status == RunningStatus.RUN:
+            # todo trigger world to observe state
+            # todo get action from agent
+            # todo noise action
+            # todo trigger world to execute
+            # todo get reward and terminal
+
+            step_reward = .7
+
+            terminal = True
+            steps += 1
+            reward += step_reward
+
+            pass
+
+    return steps, reward
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -65,6 +98,7 @@ if __name__ == "__main__":
 
     params = None
     run_number = None
+    statistics = None
 
     app_thread = Thread(target=app.run, args=(args.host, args.port), daemon=True)
     app_thread.start()
@@ -79,7 +113,11 @@ if __name__ == "__main__":
 
                 # todo: reset world
 
-                pass
+                steps, reward = run_until_terminal(0)
+
+                continue
+
+
 
             print(run_number)
             time.sleep(1)
